@@ -41,6 +41,10 @@ func init() {
 	backend.Register("local", "local", service, cloud.NotImplementedCloudService)
 }
 
+func LoadLocalBackend() {
+	//ensure package init
+}
+
 func service(ctx context.Context) (backend.Service, error) {
 	apiClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {

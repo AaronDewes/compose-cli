@@ -42,16 +42,18 @@ func NewWithDefaultLocalBackend(ctx context.Context) (*Client, error) {
 
 func newWithDefaultBackend(ctx context.Context, defaultBackend string) (*Client, error) {
 	currentContext := apicontext.CurrentContext(ctx)
-	s := store.ContextStore(ctx)
-
-	cc, err := s.Get(currentContext)
-	if err != nil {
-		return nil, err
-	}
-
-	backendName := cc.Type()
-	if backendName == store.DefaultContextType && defaultBackend != "" {
+	var backendName string
+	if currentContext == "" {
 		backendName = defaultBackend
+	} else {
+		s := store.ContextStore(ctx)
+
+		cc, err := s.Get(currentContext)
+		if err != nil {
+			return nil, err
+		}
+
+		backendName = cc.Type()
 	}
 
 	service, err := backend.Get(ctx, backendName)
@@ -59,7 +61,7 @@ func newWithDefaultBackend(ctx context.Context, defaultBackend string) (*Client,
 		return nil, err
 	}
 
-	client := NewClient(cc.Type(), service)
+	client := NewClient(backendName, service)
 	return &client, nil
 }
 

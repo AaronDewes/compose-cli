@@ -56,7 +56,6 @@ import (
 
 var (
 	contextAgnosticCommands = map[string]struct{}{
-		"compose":          {},
 		"context":          {},
 		"login":            {},
 		"logout":           {},
@@ -260,6 +259,7 @@ func exit(ctx string, err error, ctype string) {
 	}
 
 	if compose.Warning != "" {
+		logrus.Warn(err)
 		fmt.Fprintln(os.Stderr, compose.Warning)
 	}
 
