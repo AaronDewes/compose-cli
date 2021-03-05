@@ -41,6 +41,7 @@ func init() {
 	backend.Register("local", "local", service, cloud.NotImplementedCloudService)
 }
 
+// LoadLocalBackend force init the local package
 func LoadLocalBackend() {
 	//ensure package init
 }
