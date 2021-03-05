@@ -226,3 +226,7 @@ func (cs *aciComposeService) Remove(ctx context.Context, project *types.Project,
 func (cs *aciComposeService) Exec(ctx context.Context, project *types.Project, opts compose.RunOptions) error {
 	return errdefs.ErrNotImplemented
 }
+
+func (cs *aciComposeService) Events(ctx context.Context, project string, options compose.EventsOptions) error {
+	return errdefs.ErrNotImplemented
+}

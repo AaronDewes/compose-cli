@@ -57,7 +57,7 @@ type (
 	}
 )
 
-// AzureLoginService Service to log into azure and get authentifier for azure APIs
+// AzureLoginService Services to log into azure and get authentifier for azure APIs
 type AzureLoginService interface {
 	Login(ctx context.Context, requestedTenantID string, cloudEnvironment string) error
 	LoginServicePrincipal(clientID string, clientSecret string, tenantID string, cloudEnvironment string) error

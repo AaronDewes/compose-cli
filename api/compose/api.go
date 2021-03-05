@@ -18,6 +18,7 @@ package compose
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -63,6 +64,8 @@ type Service interface {
 	Pause(ctx context.Context, project *types.Project) error
 	// UnPause executes the equivalent to a `compose unpause`
 	UnPause(ctx context.Context, project *types.Project) error
+	// Events executes the equivalent to a `compose events`
+	Events(ctx context.Context, project string, options EventsOptions) error
 }
 
 // BuildOptions group options of the Build API
@@ -149,7 +152,7 @@ type RemoveOptions struct {
 	Force bool
 }
 
-// RunOptions options to execute compose run
+// RunOptions group options of the Run API
 type RunOptions struct {
 	Name        string
 	Service     string
@@ -167,6 +170,31 @@ type RunOptions struct {
 	Privileged  bool
 	// used by exec
 	Index int
+}
+
+// EventsOptions group options of the Events API
+type EventsOptions struct {
+	Services []string
+	Consumer func(event Event) error
+}
+
+// Event is a container runtime event served by Events API
+type Event struct {
+	Timestamp  time.Time
+	Service    string
+	Container  string
+	Status     string
+	Attributes map[string]string
+}
+
+func (e Event) String() string {
+	t := e.Timestamp.Format("2006-01-02 15:04:05.000000")
+	var attr []string
+	for k, v := range e.Attributes {
+		attr = append(attr, fmt.Sprintf("%s=%s", k, v))
+	}
+	return fmt.Sprintf("%s container %s %s (%s)\n", t, e.Status, e.Container, strings.Join(attr, ", "))
+
 }
 
 // EnvironmentMap return RunOptions.Environment as a MappingWithEquals

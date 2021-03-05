@@ -191,3 +191,7 @@ func (e ecsLocalSimulation) Pause(ctx context.Context, project *types.Project) e
 func (e ecsLocalSimulation) UnPause(ctx context.Context, project *types.Project) error {
 	return e.compose.UnPause(ctx, project)
 }
+
+func (e ecsLocalSimulation) Events(ctx context.Context, project string, options compose.EventsOptions) error {
+	return e.compose.Events(ctx, project, options)
+}
