@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/docker/compose-cli/cli/cmd/compose"
+	"github.com/docker/compose-cli/cmd/compose"
 	. "github.com/docker/compose-cli/docs/yaml"
 )
 
@@ -35,7 +35,7 @@ const descriptionSourcePath = "docs/reference/"
 
 func generateCliYaml(opts *options) error {
 	cmd := &cobra.Command{Use: "docker"}
-	cmd.AddCommand(compose.Command("local"))
+	cmd.AddCommand(compose.RootCommand("local", nil))
 	disableFlagsInUseLine(cmd)
 	source := filepath.Join(opts.source, descriptionSourcePath)
 	if err := loadLongDescription(cmd, source); err != nil {

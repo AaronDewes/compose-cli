@@ -11,11 +11,10 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - golint
+    - revive
     - gosimple
     - govet
     - ineffassign
-    - interfacer
     - lll
     - misspell
     - nakedret

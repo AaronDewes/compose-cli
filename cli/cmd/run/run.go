@@ -29,8 +29,8 @@ import (
 	"github.com/docker/compose-cli/api/client"
 	"github.com/docker/compose-cli/api/containers"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/progress"
 	"github.com/docker/compose-cli/cli/options/run"
+	"github.com/docker/compose-cli/pkg/progress"
 )
 
 // Command runs a container
@@ -103,7 +103,7 @@ func runRun(ctx context.Context, image string, contextType string, opts run.Opts
 		return err
 	}
 
-	result, err := progress.Run(ctx, func(ctx context.Context) (string, error) {
+	result, err := progress.RunWithStatus(ctx, func(ctx context.Context) (string, error) {
 		return containerConfig.ID, c.ContainerService().Run(ctx, containerConfig)
 	})
 	if err != nil {

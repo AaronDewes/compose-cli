@@ -28,9 +28,9 @@ import (
 	"gotest.tools/v3/assert"
 	is "gotest.tools/v3/assert/cmp"
 
-	"github.com/docker/compose-cli/api/compose"
 	"github.com/docker/compose-cli/api/containers"
 	"github.com/docker/compose-cli/api/context/store"
+	"github.com/docker/compose-cli/pkg/api"
 )
 
 var (
@@ -258,7 +258,7 @@ func TestContainerGroupToServiceStatus(t *testing.T) {
 		},
 	}
 
-	var expectedService = compose.ServiceStatus{
+	var expectedService = api.ServiceStatus{
 		ID:       "myContainerID",
 		Name:     "myContainerID",
 		Ports:    []string{"42.42.42.42:80->80/tcp"},
@@ -570,7 +570,7 @@ func TestConvertContainerGroupStatus(t *testing.T) {
 }
 
 func container(status *string) containerinstance.Container {
-	var state *containerinstance.ContainerState = nil
+	var state *containerinstance.ContainerState
 	if status != nil {
 		state = &containerinstance.ContainerState{
 			State: status,
@@ -586,7 +586,7 @@ func container(status *string) containerinstance.Container {
 }
 
 func group(status *string) containerinstance.ContainerGroup {
-	var view *containerinstance.ContainerGroupPropertiesInstanceView = nil
+	var view *containerinstance.ContainerGroupPropertiesInstanceView
 	if status != nil {
 		view = &containerinstance.ContainerGroupPropertiesInstanceView{
 			State: status,

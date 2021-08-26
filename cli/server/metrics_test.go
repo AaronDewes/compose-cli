@@ -29,18 +29,16 @@ import (
 	"gotest.tools/v3/assert"
 
 	"github.com/docker/compose-cli/api/client"
-	"github.com/docker/compose-cli/api/compose"
 	"github.com/docker/compose-cli/api/containers"
-	"github.com/docker/compose-cli/api/errdefs"
 	"github.com/docker/compose-cli/api/secrets"
 	"github.com/docker/compose-cli/api/volumes"
 	"github.com/docker/compose-cli/cli/metrics"
-	composev1 "github.com/docker/compose-cli/cli/server/protos/compose/v1"
 	containersv1 "github.com/docker/compose-cli/cli/server/protos/containers/v1"
 	contextsv1 "github.com/docker/compose-cli/cli/server/protos/contexts/v1"
 	streamsv1 "github.com/docker/compose-cli/cli/server/protos/streams/v1"
 	volumesv1 "github.com/docker/compose-cli/cli/server/protos/volumes/v1"
 	"github.com/docker/compose-cli/cli/server/proxy"
+	"github.com/docker/compose-cli/pkg/api"
 )
 
 func TestAllMethodsHaveCorrespondingCliCommand(t *testing.T) {
@@ -78,8 +76,8 @@ func TestTrackSFailures(t *testing.T) {
 	interceptor := metricsServerInterceptor(mockMetrics)
 
 	ctx := proxy.WithClient(incomingContext("default"), &newClient)
-	_, err := interceptor(ctx, nil, containerMethodRoute("Create"), mockHandler(errdefs.ErrLoginRequired))
-	assert.Assert(t, err == errdefs.ErrLoginRequired)
+	_, err := interceptor(ctx, nil, containerMethodRoute("Create"), mockHandler(api.ErrLoginRequired))
+	assert.Assert(t, err == api.ErrLoginRequired)
 }
 
 func containerMethodRoute(action string) *grpc.UnaryServerInfo {
@@ -106,7 +104,6 @@ func setupServer() *grpc.Server {
 	ctx := context.TODO()
 	s := New(ctx)
 	p := proxy.New(ctx)
-	composev1.RegisterComposeServer(s, p)
 	containersv1.RegisterContainersServer(s, p)
 	streamsv1.RegisterStreamingServer(s, p)
 	volumesv1.RegisterVolumesServer(s, p)
@@ -117,7 +114,7 @@ func setupServer() *grpc.Server {
 type noopService struct{}
 
 func (noopService) ContainerService() containers.Service { return nil }
-func (noopService) ComposeService() compose.Service      { return nil }
+func (noopService) ComposeService() api.Service          { return nil }
 func (noopService) SecretsService() secrets.Service      { return nil }
 func (noopService) VolumeService() volumes.Service       { return nil }
 func (noopService) ResourceService() resources.Service   { return nil }

@@ -19,12 +19,25 @@ package ecs
 import (
 	"context"
 
-	"github.com/docker/compose-cli/api/compose"
+	"github.com/pkg/errors"
 
-	"github.com/docker/compose-cli/api/progress"
+	"github.com/docker/compose-cli/pkg/api"
+	"github.com/docker/compose-cli/pkg/progress"
 )
 
-func (b *ecsAPIService) Down(ctx context.Context, projectName string, options compose.DownOptions) error {
+func (b *ecsAPIService) Down(ctx context.Context, projectName string, options api.DownOptions) error {
+	if options.Volumes {
+		return errors.Wrap(api.ErrNotImplemented, "--volumes option is not supported on ECS")
+	}
+	if options.Images != "" {
+		return errors.Wrap(api.ErrNotImplemented, "--rmi option is not supported on ECS")
+	}
+	return progress.Run(ctx, func(ctx context.Context) error {
+		return b.down(ctx, projectName)
+	})
+}
+
+func (b *ecsAPIService) down(ctx context.Context, projectName string) error {
 	resources, err := b.aws.ListStackResources(ctx, projectName)
 	if err != nil {
 		return err

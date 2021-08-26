@@ -35,25 +35,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/resources/mgmt/resources"
+	"github.com/Azure/azure-storage-file-go/azfile"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/docker/docker/pkg/fileutils"
-
+	"github.com/prometheus/tsdb/fileutil"
 	"gotest.tools/v3/assert"
 	is "gotest.tools/v3/assert/cmp"
 	"gotest.tools/v3/icmd"
 	"gotest.tools/v3/poll"
-
-	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/resources/mgmt/resources"
-	"github.com/Azure/azure-storage-file-go/azfile"
-	"github.com/Azure/go-autorest/autorest/to"
-	"github.com/prometheus/tsdb/fileutil"
 
 	"github.com/docker/compose-cli/aci"
 	"github.com/docker/compose-cli/aci/convert"
 	"github.com/docker/compose-cli/aci/login"
 	"github.com/docker/compose-cli/api/containers"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/errdefs"
 	"github.com/docker/compose-cli/cli/cmd"
+	"github.com/docker/compose-cli/pkg/api"
 	. "github.com/docker/compose-cli/utils/e2e"
 )
 
@@ -128,7 +126,7 @@ func TestLoginLogout(t *testing.T) {
 	t.Run("create context fail", func(t *testing.T) {
 		res := c.RunDockerOrExitError("context", "create", "aci", "fail-context")
 		res.Assert(t, icmd.Expected{
-			ExitCode: errdefs.ExitCodeLoginRequired,
+			ExitCode: api.ExitCodeLoginRequired,
 			Err:      `not logged in to azure, you need to run "docker login azure" first`,
 		})
 	})
@@ -385,7 +383,7 @@ func TestContainerRunAttached(t *testing.T) {
 
 	// Used in subtests
 	var (
-		container         string = "test-container"
+		container         = "test-container"
 		endpoint          string
 		followLogsProcess *icmd.Result
 	)
@@ -555,7 +553,7 @@ func TestUpSecretsResources(t *testing.T) {
 		secret2Value = "another_password\n"
 	)
 
-	composefilePath := filepath.Join("aci_secrets_resources", "compose.yml")
+	composefilePath := filepath.Join("aci_secrets_resources", "compose.yaml")
 
 	c := NewParallelE2eCLI(t, binDir)
 	_, _, _ = setupTestResourceGroup(t, c)

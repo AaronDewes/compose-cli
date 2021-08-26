@@ -22,15 +22,17 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
-
-	"github.com/spf13/cobra"
 
 	apicontext "github.com/docker/compose-cli/api/context"
 	"github.com/docker/compose-cli/api/context/store"
 	"github.com/docker/compose-cli/cli/metrics"
 	"github.com/docker/compose-cli/cli/mobycli/resolvepath"
-	"github.com/docker/compose-cli/utils"
+	"github.com/spf13/cobra"
+
+	"github.com/docker/compose-cli/pkg/compose"
+	"github.com/docker/compose-cli/pkg/utils"
 )
 
 var delegatedContextTypes = []string{store.DefaultContextType}
@@ -68,22 +70,22 @@ func Exec(root *cobra.Command) {
 	if err != nil {
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			exitCode := exiterr.ExitCode()
-			if exitCode == 130 {
-				metrics.Track(store.DefaultContextType, os.Args[1:], metrics.CanceledStatus)
-			} else {
-				metrics.Track(store.DefaultContextType, os.Args[1:], metrics.FailureStatus)
-			}
-			os.Exit(exiterr.ExitCode())
+			metrics.Track(store.DefaultContextType, os.Args[1:], compose.ByExitCode(exitCode).MetricsStatus)
+			os.Exit(exitCode)
 		}
-		metrics.Track(store.DefaultContextType, os.Args[1:], metrics.FailureStatus)
+		metrics.Track(store.DefaultContextType, os.Args[1:], compose.FailureStatus)
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	command := metrics.GetCommand(os.Args[1:])
-	if command == "build" && !metrics.HasQuietFlag(os.Args[1:]) {
+	commandArgs := os.Args[1:]
+	command := metrics.GetCommand(commandArgs)
+	if command == "build" && !metrics.HasQuietFlag(commandArgs) {
 		utils.DisplayScanSuggestMsg()
 	}
-	metrics.Track(store.DefaultContextType, os.Args[1:], metrics.SuccessStatus)
+	if command == "login" && !metrics.HasQuietFlag(commandArgs) {
+		displayPATSuggestMsg(commandArgs)
+	}
+	metrics.Track(store.DefaultContextType, os.Args[1:], compose.SuccessStatus)
 
 	os.Exit(0)
 }
@@ -92,8 +94,12 @@ func Exec(root *cobra.Command) {
 func RunDocker(childExit chan bool, args ...string) error {
 	execBinary, err := resolvepath.LookPath(ComDockerCli)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		execBinary = findBinary(ComDockerCli)
+		if execBinary == "" {
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, "Current PATH : "+os.Getenv("PATH"))
+			os.Exit(1)
+		}
 	}
 	cmd := exec.Command(execBinary, args...)
 	cmd.Stdin = os.Stdin
@@ -109,8 +115,13 @@ func RunDocker(childExit chan bool, args ...string) error {
 				if cmd.Process == nil {
 					continue // can happen if receiving signal before the process is actually started
 				}
-				// nolint errcheck
-				cmd.Process.Signal(sig)
+				// In go1.14+, the go runtime issues SIGURG as an interrupt to
+				// support preemptable system calls on Linux. Since we can't
+				// forward that along we'll check that here.
+				if isRuntimeSig(sig) {
+					continue
+				}
+				_ = cmd.Process.Signal(sig)
 			case <-childExit:
 				return
 			}
@@ -118,6 +129,22 @@ func RunDocker(childExit chan bool, args ...string) error {
 	}()
 
 	return cmd.Run()
+}
+
+func findBinary(filename string) string {
+	currentBinaryPath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	currentBinaryPath, err = filepath.EvalSymlinks(currentBinaryPath)
+	if err != nil {
+		return ""
+	}
+	binaryPath := filepath.Join(filepath.Dir(currentBinaryPath), filename)
+	if _, err := os.Stat(binaryPath); err != nil {
+		return ""
+	}
+	return binaryPath
 }
 
 // IsDefaultContextCommand checks if the command exists in the classic cli (issues a shellout --help)
