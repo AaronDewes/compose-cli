@@ -19,7 +19,6 @@ package login
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -39,7 +38,7 @@ import (
 )
 
 func testLoginService(t *testing.T, apiHelperMock *MockAzureHelper, cloudEnvironmentSvc CloudEnvironmentService) (*azureLoginService, error) {
-	dir, err := ioutil.TempDir("", "test_store")
+	dir, err := os.MkdirTemp("", "test_store")
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +458,7 @@ func TestNonstandardCloudEnvironment(t *testing.T) {
 		},
 		"resourceManager": "https://management.docker.com/"
 	}]`)
-	var metadataReqCount int32 = 0
+	var metadataReqCount int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write(dockerCloudMetadata)
 		assert.NilError(t, err)

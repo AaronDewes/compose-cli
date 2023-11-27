@@ -3,9 +3,15 @@ title: ECS integration architecture
 description: Mapping of Docker compose entities to Amazon constructs
 keywords: Docker, Amazon, Integration, ECS, Compose, architecture, mapping
 ---
+
+> **Important**
+>
+> Docker Compose's integration for ECS and ACI retired in November 2023.
+{: .important}
+
 # Architecture
 
-ECS integration relies on CloudFormation to manage AWS resrouces as an atomic operation.
+ECS integration relies on CloudFormation to manage AWS resources as an atomic operation.
 This document describes the mapping between compose application model and AWS components
 
 ## Overview
@@ -59,7 +65,7 @@ This diagram shows compose model and on same line AWS components that get create
       +------------+                        +---------------+
 ```
 
-Each compose application service is mapped to an ECS `Service`. A `TaksDefinition` is created according to compose definition.
+Each compose application service is mapped to an ECS `Service`. A `TaskDefinition` is created according to compose definition.
 Actual mapping is constrained by both Cloud platform and Fargate limitations. Such a `TaskDefinition` is set with a single container,
 according to the compose model which doesn't offer a syntax to support sidecar containers.
 
@@ -67,7 +73,7 @@ An IAM Role is created and configured as `TaskRole` to grant service access to a
 purpose, user can set `x-aws-policies` or define a fine grained `x-aws-role` IAM role document.
 
 Service's ports get mapped into security group's `IngressRule`s and load balancer `Listener`s.
-Compose application whith HTTP services only (using ports 80/443 or `x-aws-protocol` set to `http`) get an Application Load Balancer
+Compose application with HTTP services only (using ports 80/443 or `x-aws-protocol` set to `http`) get an Application Load Balancer
 created, otherwise a Network Load Balancer is used.
 
 A `TargetGroup` is created per service to dispatch traffic by load balancer to the matching containers

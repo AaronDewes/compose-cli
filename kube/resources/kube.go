@@ -1,3 +1,4 @@
+//go:build kube
 // +build kube
 
 /*
@@ -25,7 +26,7 @@ import (
 	"time"
 
 	"github.com/compose-spec/compose-go/types"
-	"github.com/docker/compose-cli/api/compose"
+	"github.com/docker/compose/v2/pkg/api"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
@@ -38,7 +39,7 @@ const (
 	clusterIPHeadless = "None"
 )
 
-//MapToKubernetesObjects maps compose project to Kubernetes objects
+// MapToKubernetesObjects maps compose project to Kubernetes objects
 func MapToKubernetesObjects(project *types.Project) (map[string]runtime.Object, error) {
 	objects := map[string]runtime.Object{}
 
@@ -92,12 +93,13 @@ func mapToService(project *types.Project, service types.ServiceConfig) *core.Ser
 		if p.Published != 0 {
 			serviceType = core.ServiceTypeLoadBalancer
 		}
+		protocol := toProtocol(p.Protocol)
 		ports = append(ports,
 			core.ServicePort{
-				Name:       fmt.Sprintf("%d-%s", p.Target, strings.ToLower(p.Protocol)),
-				Port:       int32(p.Target),
+				Name:       fmt.Sprintf("%d-%s", p.Published, strings.ToLower(string(protocol))),
+				Port:       int32(p.Published),
 				TargetPort: intstr.FromInt(int(p.Target)),
-				Protocol:   toProtocol(p.Protocol),
+				Protocol:   protocol,
 			})
 	}
 	if len(ports) == 0 { // headless service
@@ -151,8 +153,8 @@ func mapToDeployment(project *types.Project, service types.ServiceConfig) (*apps
 
 func selectorLabels(projectName string, serviceName string) map[string]string {
 	return map[string]string{
-		compose.ProjectTag: projectName,
-		compose.ServiceTag: serviceName,
+		api.ProjectLabel: projectName,
+		api.ServiceLabel: serviceName,
 	}
 }
 

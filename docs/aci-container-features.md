@@ -3,10 +3,16 @@ title: ACI integration container features
 description: Reference list of container ACI features
 keywords: Docker, Azure, Integration, ACI, container, cli, deploy, cloud
 ---
-# Azure Container Instances: running single containerrs
+
+> **Important**
+>
+> Docker Compose's integration for ECS and ACI retired in November 2023.
+{: .important}
+
+# Azure Container Instances: running single containers
 
 Single containers can be executed on ACI with the `docker run` command.
-A single container is executed in its own ACI container group, that will container only one container.
+A single container is executed in its own ACI container group, which will contain a single container.
 
 Containers can be listed with the `docker ps` command, and stopped and removed with `docker stop <CONTAINER>` and `docker rm <CONTAINER>`.
 

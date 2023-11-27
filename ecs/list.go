@@ -20,25 +20,34 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/docker/compose-cli/api/compose"
+	"github.com/docker/compose/v2/pkg/api"
+
+	"github.com/docker/compose-cli/utils"
 )
 
-func (b *ecsAPIService) List(ctx context.Context, opts compose.ListOptions) ([]compose.Stack, error) {
+func (b *ecsAPIService) List(ctx context.Context, opts api.ListOptions) ([]api.Stack, error) {
+	if err := checkUnsupportedListOptions(ctx, opts); err != nil {
+		return nil, err
+	}
 	stacks, err := b.aws.ListStacks(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, stack := range stacks {
-		if stack.Status == compose.STARTING {
+		if stack.Status == api.STARTING {
 			if err := b.checkStackState(ctx, stack.Name); err != nil {
-				stack.Status = compose.FAILED
+				stack.Status = api.FAILED
 				stack.Reason = err.Error()
 			}
 		}
 	}
 	return stacks, nil
 
+}
+
+func checkUnsupportedListOptions(ctx context.Context, o api.ListOptions) error {
+	return utils.CheckUnsupported(ctx, nil, o.All, false, "ls", "all")
 }
 
 func (b *ecsAPIService) checkStackState(ctx context.Context, name string) error {

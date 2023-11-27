@@ -6,31 +6,28 @@ linters:
   enable-all: false
   disable-all: true
   enable:
-    - deadcode
     - errcheck
     - gocyclo
     - gofmt
     - goimports
-    - golint
     - gosimple
     - govet
     - ineffassign
-    - interfacer
     - lll
     - misspell
     - nakedret
     - staticcheck
-    - structcheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
 linters-settings:
   gocyclo:
     min-complexity: 16
   lll:
     line-length: 200
+  goimports:
+    local-prefixes: github.com/docker/compose-cli
 issues:
   # golangci hides some golint warnings (the warning about exported things
   # withtout documentation for example), this will make it show them anyway.

@@ -17,37 +17,69 @@
 package local
 
 import (
+	"os"
+
+	"github.com/docker/cli/cli/command"
+	cliconfig "github.com/docker/cli/cli/config"
+	cliflags "github.com/docker/cli/cli/flags"
+	"github.com/docker/compose/v2/pkg/api"
+	"github.com/docker/compose/v2/pkg/compose"
 	"github.com/docker/docker/client"
 
 	"github.com/docker/compose-cli/api/backend"
-	"github.com/docker/compose-cli/api/compose"
 	"github.com/docker/compose-cli/api/containers"
 	"github.com/docker/compose-cli/api/resources"
 	"github.com/docker/compose-cli/api/secrets"
 	"github.com/docker/compose-cli/api/volumes"
-	local_compose "github.com/docker/compose-cli/local/compose"
+	cliopts "github.com/docker/compose-cli/cli/options"
 )
 
 type local struct {
 	containerService *containerService
 	volumeService    *volumeService
-	composeService   compose.Service
+	composeService   api.Service
 }
 
 // NewService build a backend for "local" context, using Docker API client
 func NewService(apiClient client.APIClient) backend.Service {
+	file := cliconfig.LoadDefaultConfigFile(os.Stderr)
 	return &local{
 		containerService: &containerService{apiClient},
 		volumeService:    &volumeService{apiClient},
-		composeService:   local_compose.NewComposeService(apiClient),
+		composeService:   compose.NewComposeService(apiClient, file),
 	}
+}
+
+// GetLocalBackend initialize local backend
+func GetLocalBackend(configDir string, opts cliopts.GlobalOpts) (backend.Service, error) {
+	configFile, err := cliconfig.Load(configDir)
+	if err != nil {
+		return nil, err
+	}
+	options := cliflags.CommonOptions{
+		Context:  opts.Context,
+		Debug:    opts.Debug,
+		Hosts:    opts.Hosts,
+		LogLevel: opts.LogLevel,
+	}
+
+	if opts.TLSVerify {
+		options.TLS = opts.TLS
+		options.TLSVerify = opts.TLSVerify
+		options.TLSOptions = opts.TLSOptions
+	}
+	apiClient, err := command.NewAPIClientFromFlags(&options, configFile)
+	if err != nil {
+		return nil, err
+	}
+	return NewService(apiClient), nil
 }
 
 func (s *local) ContainerService() containers.Service {
 	return s.containerService
 }
 
-func (s *local) ComposeService() compose.Service {
+func (s *local) ComposeService() api.Service {
 	return s.composeService
 }
 

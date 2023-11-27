@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -54,7 +53,7 @@ func TestSecrets(t *testing.T) {
 
 	t.Run("create secret", func(t *testing.T) {
 		secretFile := filepath.Join(cmd.BinDir, "secret.txt")
-		err := ioutil.WriteFile(secretFile, []byte("pass1"), 0644)
+		err := os.WriteFile(secretFile, []byte("pass1"), 0644)
 		assert.Check(t, err == nil)
 		res := cmd.RunDockerCmd("secret", "create", secretName, secretFile)
 		assert.Check(t, strings.Contains(res.Stdout(), secretName), res.Stdout())
@@ -102,15 +101,18 @@ func TestCompose(t *testing.T) {
 				assert.DeepEqual(t, fields, []string{containerID, serviceName, "Running"})
 			case "words":
 				wordsDisplayed = true
-				assert.Check(t, strings.Contains(fields[3], ":8080->8080/tcp"))
+				assert.Check(t, strings.Contains(fields[3], ":8080->8080/tcp"),
+					"Got -> %q. All fields -> %#v", fields[3], fields)
 				wordsURL = "http://" + strings.Replace(fields[3], "->8080/tcp", "", 1) + "/noun"
 			case "web":
 				webDisplayed = true
-				assert.Check(t, strings.Contains(fields[3], ":80->80/tcp"))
+				assert.Check(t, strings.Contains(fields[3], ":80->80/tcp"),
+					"Got -> %q. All fields -> %#v", fields[3], fields)
 				webURL = "http://" + strings.Replace(fields[3], "->80/tcp", "", 1)
 			case "websecrets":
 				secretsDisplayed = true
-				assert.Check(t, strings.Contains(fields[3], ":90->90/tcp"))
+				assert.Check(t, strings.Contains(fields[3], ":90->90/tcp"),
+					"Got -> %q. All fields -> %#v", fields[3], fields)
 				secretsURL = "http://" + strings.Replace(fields[3], "->90/tcp", "", 1)
 			}
 		}
@@ -169,7 +171,7 @@ func TestCompose(t *testing.T) {
 func setupTest(t *testing.T) (*E2eCLI, string) {
 	startTime := strconv.Itoa(int(time.Now().UnixNano()))
 	c := NewParallelE2eCLI(t, binDir)
-	contextName := "e2e" + t.Name() + startTime
+	contextName := "e2e" + strings.ToLower(t.Name()) + startTime
 	stack := contextName
 	t.Run("create context", func(t *testing.T) {
 		localTestProfile := os.Getenv("TEST_AWS_PROFILE")

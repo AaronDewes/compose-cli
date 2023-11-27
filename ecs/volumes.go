@@ -20,14 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/docker/compose-cli/api/compose"
-	"github.com/docker/compose-cli/api/errdefs"
-	"github.com/docker/compose-cli/api/volumes"
-
 	"github.com/awslabs/goformation/v4/cloudformation"
 	"github.com/awslabs/goformation/v4/cloudformation/efs"
 	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose/v2/pkg/api"
 	"github.com/pkg/errors"
+
+	"github.com/docker/compose-cli/api/volumes"
 )
 
 func (b *ecsAPIService) createNFSMountTarget(project *types.Project, resources awsResources, template *cloudformation.Template) {
@@ -63,11 +62,11 @@ func (b *ecsAPIService) createAccessPoints(project *types.Project, r awsResource
 		ap := efs.AccessPoint{
 			AccessPointTags: []efs.AccessPoint_AccessPointTag{
 				{
-					Key:   compose.ProjectTag,
+					Key:   api.ProjectLabel,
 					Value: project.Name,
 				},
 				{
-					Key:   compose.VolumeTag,
+					Key:   api.VolumeLabel,
 					Value: name,
 				},
 				{
@@ -147,7 +146,7 @@ func (e ecsVolumeService) Delete(ctx context.Context, volumeID string, options i
 func (e ecsVolumeService) Inspect(ctx context.Context, volumeID string) (volumes.Volume, error) {
 	ok, err := e.backend.aws.ResolveFileSystem(ctx, volumeID)
 	if ok == nil {
-		err = errors.Wrapf(errdefs.ErrNotFound, "filesystem %q does not exists", volumeID)
+		err = errors.Wrapf(api.ErrNotFound, "filesystem %q does not exists", volumeID)
 	}
 	return volumes.Volume{
 		ID:          volumeID,

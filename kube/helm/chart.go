@@ -1,3 +1,4 @@
+//go:build kube
 // +build kube
 
 /*
@@ -27,16 +28,17 @@ import (
 	"strings"
 
 	"github.com/compose-spec/compose-go/types"
-	"github.com/docker/compose-cli/kube/resources"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
+
+	"github.com/docker/compose-cli/kube/resources"
 
 	chart "helm.sh/helm/v3/pkg/chart"
 	loader "helm.sh/helm/v3/pkg/chart/loader"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-//ConvertToChart convert Kube objects to helm chart
+// ConvertToChart convert Kube objects to helm chart
 func ConvertToChart(name string, objects map[string]runtime.Object) (*chart.Chart, error) {
 
 	files := []*loader.BufferedFile{

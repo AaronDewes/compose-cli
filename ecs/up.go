@@ -23,66 +23,31 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose/v2/pkg/api"
+	"github.com/docker/compose/v2/pkg/progress"
 	"github.com/sirupsen/logrus"
 
-	"github.com/docker/compose-cli/api/compose"
-	"github.com/docker/compose-cli/api/errdefs"
-
-	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose-cli/utils"
 )
 
-func (b *ecsAPIService) Build(ctx context.Context, project *types.Project, options compose.BuildOptions) error {
-	return errdefs.ErrNotImplemented
+func (b *ecsAPIService) Up(ctx context.Context, project *types.Project, options api.UpOptions) error {
+	if err := checkUnsupportedUpOptions(ctx, options); err != nil {
+		return err
+	}
+	return progress.Run(ctx, func(ctx context.Context) error {
+		return b.up(ctx, project, options)
+	})
 }
 
-func (b *ecsAPIService) Push(ctx context.Context, project *types.Project, options compose.PushOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Pull(ctx context.Context, project *types.Project, options compose.PullOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Create(ctx context.Context, project *types.Project, opts compose.CreateOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Start(ctx context.Context, project *types.Project, options compose.StartOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Restart(ctx context.Context, project *types.Project, options compose.RestartOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Stop(ctx context.Context, project *types.Project, options compose.StopOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Pause(ctx context.Context, project string, options compose.PauseOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) UnPause(ctx context.Context, project string, options compose.PauseOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Events(ctx context.Context, project string, options compose.EventsOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Port(ctx context.Context, project string, service string, port int, options compose.PortOptions) (string, int, error) {
-	return "", 0, errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Up(ctx context.Context, project *types.Project, options compose.UpOptions) error {
+func (b *ecsAPIService) up(ctx context.Context, project *types.Project, options api.UpOptions) error {
 	logrus.Debugf("deploying on AWS with region=%q", b.Region)
 	err := b.aws.CheckRequirements(ctx, b.Region)
 	if err != nil {
 		return err
 	}
 
-	template, err := b.Convert(ctx, project, compose.ConvertOptions{
+	template, err := b.Convert(ctx, project, api.ConvertOptions{
 		Format: "yaml",
 	})
 	if err != nil {
@@ -120,7 +85,7 @@ func (b *ecsAPIService) Up(ctx context.Context, project *types.Project, options 
 			return err
 		}
 	}
-	if options.Detach {
+	if options.Start.Attach == nil {
 		return nil
 	}
 	signalChan := make(chan os.Signal, 1)
@@ -128,9 +93,30 @@ func (b *ecsAPIService) Up(ctx context.Context, project *types.Project, options 
 	go func() {
 		<-signalChan
 		fmt.Println("user interrupted deployment. Deleting stack...")
-		b.Down(ctx, project.Name, compose.DownOptions{}) // nolint:errcheck
+		b.Down(ctx, project.Name, api.DownOptions{}) // nolint:errcheck
 	}()
 
 	err = b.WaitStackCompletion(ctx, project.Name, operation, previousEvents...)
 	return err
+}
+
+func checkUnsupportedUpOptions(ctx context.Context, o api.UpOptions) error {
+	var errs error
+	checks := []struct {
+		toCheck, expected interface{}
+		option            string
+	}{
+		{o.Create.Inherit, true, "renew-anon-volumes"},
+		{o.Create.RemoveOrphans, false, "remove-orphans"},
+		{o.Create.QuietPull, false, "quiet-pull"},
+		{o.Create.Recreate, api.RecreateDiverged, "force-recreate"},
+		{o.Create.RecreateDependencies, api.RecreateDiverged, "always-recreate-deps"},
+		{len(o.Start.AttachTo), 0, "attach-dependencies"},
+		{len(o.Start.ExitCodeFrom), 0, "exit-code-from"},
+		{o.Create.Timeout, nil, "timeout"},
+	}
+	for _, c := range checks {
+		errs = utils.CheckUnsupported(ctx, errs, c.toCheck, c.expected, "up", c.option)
+	}
+	return errs
 }

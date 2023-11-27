@@ -30,9 +30,13 @@ import (
 	"github.com/Azure/go-autorest/autorest/date"
 	"github.com/pkg/errors"
 
-	"github.com/docker/compose-cli/api/errdefs"
+	"github.com/docker/compose/v2/pkg/api"
+
 	"github.com/docker/compose-cli/internal"
 )
+
+// UserAgentName is the default user agent used by the cli
+const UserAgentName = "docker-cli"
 
 // NewContainerGroupsClient get client toi manipulate containerGrouos
 func NewContainerGroupsClient(subscriptionID string) (containerinstance.ContainerGroupsClient, error) {
@@ -52,7 +56,7 @@ func NewContainerGroupsClient(subscriptionID string) (containerinstance.Containe
 }
 
 func setupClient(aciClient *autorest.Client, auth autorest.Authorizer) {
-	aciClient.UserAgent = internal.UserAgentName + "/" + internal.Version
+	aciClient.UserAgent = UserAgentName + "/" + internal.Version
 	aciClient.Authorizer = auth
 }
 
@@ -88,7 +92,7 @@ func NewFileShareClient(subscriptionID string) (storage.FileSharesClient, error)
 func NewSubscriptionsClient() (subscription.SubscriptionsClient, error) {
 	authorizer, mgmtURL, err := getClientSetupData()
 	if err != nil {
-		return subscription.SubscriptionsClient{}, errors.Wrap(errdefs.ErrLoginRequired, err.Error())
+		return subscription.SubscriptionsClient{}, errors.Wrap(api.ErrLoginRequired, err.Error())
 	}
 	subc := subscription.NewSubscriptionsClientWithBaseURI(mgmtURL)
 	setupClient(&subc.Client, authorizer)

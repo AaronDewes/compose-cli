@@ -30,6 +30,8 @@ Use the commands below to provide key information from your environment:
 You do NOT have to include this information if this is a FEATURE REQUEST
 -->
 
+/!\ Docker Compose V2 has moved to [github.com/docker/compose](https://github.com/docker/compose/tree/v2), this repository is for "Cloud Integrations". You can report issues related to `docker compose` [here](https://github.com/docker/compose/issues/new/choose).
+
 **Description**
 
 <!--
@@ -48,6 +50,12 @@ Briefly describe the problem you are having in a few paragraphs.
 
 
 **Additional information you deem important (e.g. issue happens only occasionally):**
+
+**Output of `docker-compose --version`:**
+
+```
+(paste your output here)
+```
 
 **Output of `docker version`:**
 

@@ -1,7 +1,8 @@
+//go:build windows
 // +build windows
 
 /*
-   Copyright 2020 Docker Compose CLI authors
+   Copyright 2020, 2022 Docker Compose CLI authors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -29,6 +30,10 @@ import (
 var (
 	socket = `\\.\pipe\docker_cli`
 )
+
+func init() {
+	overrideSocket() // no-op, unless built for e2e testing
+}
 
 func conn() (net.Conn, error) {
 	if strings.HasPrefix(socket, `\\.\pipe\`) {

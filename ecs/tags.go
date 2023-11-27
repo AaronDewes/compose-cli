@@ -19,14 +19,13 @@ package ecs
 import (
 	"github.com/awslabs/goformation/v4/cloudformation/tags"
 	"github.com/compose-spec/compose-go/types"
-
-	"github.com/docker/compose-cli/api/compose"
+	"github.com/docker/compose/v2/pkg/api"
 )
 
 func projectTags(project *types.Project) []tags.Tag {
 	return []tags.Tag{
 		{
-			Key:   compose.ProjectTag,
+			Key:   api.ProjectLabel,
 			Value: project.Name,
 		},
 	}
@@ -35,11 +34,11 @@ func projectTags(project *types.Project) []tags.Tag {
 func serviceTags(project *types.Project, service types.ServiceConfig) []tags.Tag {
 	return []tags.Tag{
 		{
-			Key:   compose.ProjectTag,
+			Key:   api.ProjectLabel,
 			Value: project.Name,
 		},
 		{
-			Key:   compose.ServiceTag,
+			Key:   api.ServiceLabel,
 			Value: service.Name,
 		},
 	}
@@ -48,11 +47,11 @@ func serviceTags(project *types.Project, service types.ServiceConfig) []tags.Tag
 func networkTags(project *types.Project, net types.NetworkConfig) []tags.Tag {
 	return []tags.Tag{
 		{
-			Key:   compose.ProjectTag,
+			Key:   api.ProjectLabel,
 			Value: project.Name,
 		},
 		{
-			Key:   compose.NetworkTag,
+			Key:   api.NetworkLabel,
 			Value: net.Name,
 		},
 	}

@@ -1,3 +1,4 @@
+//go:build kube
 // +build kube
 
 /*
@@ -19,11 +20,11 @@
 package context
 
 import (
+	"github.com/docker/compose/v2/pkg/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/errdefs"
 	"github.com/docker/compose-cli/kube"
 )
 
@@ -31,8 +32,8 @@ func init() {
 	extraCommands = append(extraCommands, createKubeCommand)
 	extraHelp = append(extraHelp, `
 Create a Kubernetes context:
-$ docker context create k8s CONTEXT [flags]
-(see docker context create k8s --help)
+$ docker context create kubernetes CONTEXT [flags]
+(see docker context create kubernetes --help)
 `)
 }
 
@@ -56,7 +57,7 @@ func createKubeCommand() *cobra.Command {
 
 func runCreateKube(contextName string, opts kube.ContextParams) error {
 	if contextExists(contextName) {
-		return errors.Wrapf(errdefs.ErrAlreadyExists, "context %q", contextName)
+		return errors.Wrapf(api.ErrAlreadyExists, "context %q", contextName)
 	}
 
 	contextData, description, err := opts.CreateContextData()

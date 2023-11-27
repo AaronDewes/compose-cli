@@ -19,7 +19,7 @@ package convert
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -70,7 +70,7 @@ func getRegistryCredentials(project compose.Project, helper registryHelper) ([]c
 		return nil, err
 	}
 
-	var cloudEnvironment *login.CloudEnvironment = nil
+	var cloudEnvironment *login.CloudEnvironment
 	if ce, err := loginService.GetCloudEnvironment(); err != nil {
 		cloudEnvironment = &ce
 	}
@@ -165,7 +165,7 @@ func (c cliRegistryHelper) autoLoginAcr(registry string, loginService login.Azur
 	if err != nil {
 		return errors.Wrap(err, "could not query ACR token")
 	}
-	bits, err := ioutil.ReadAll(res.Body)
+	bits, err := io.ReadAll(res.Body)
 	if err != nil {
 		return errors.Wrap(err, "could not read response body")
 	}

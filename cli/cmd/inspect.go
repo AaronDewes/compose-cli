@@ -22,12 +22,12 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose/v2/cmd/formatter"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/docker/compose-cli/api/client"
 	"github.com/docker/compose-cli/api/containers"
-	"github.com/docker/compose-cli/cli/formatter"
 )
 
 // InspectCommand inspects into containers

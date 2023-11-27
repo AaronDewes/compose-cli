@@ -28,10 +28,10 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2019-12-01/containerinstance"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose/v2/pkg/api"
 	"github.com/pkg/errors"
 
 	"github.com/docker/compose-cli/aci/login"
-	"github.com/docker/compose-cli/api/compose"
 	"github.com/docker/compose-cli/api/containers"
 	"github.com/docker/compose-cli/api/context/store"
 	"github.com/docker/compose-cli/utils/formatter"
@@ -218,7 +218,7 @@ func (s serviceConfigAciHelper) getResourceRequestsLimits() (*containerinstance.
 	}
 
 	if hasCPURequest() {
-		cpuRequest, err = strconv.ParseFloat(s.Deploy.Resources.Reservations.NanoCPUs, 0)
+		cpuRequest, err = strconv.ParseFloat(s.Deploy.Resources.Reservations.NanoCPUs, 64)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +233,7 @@ func (s serviceConfigAciHelper) getResourceRequestsLimits() (*containerinstance.
 			}
 		}
 		if s.Deploy.Resources.Limits.NanoCPUs != "" {
-			cpuLimit, err = strconv.ParseFloat(s.Deploy.Resources.Limits.NanoCPUs, 0)
+			cpuLimit, err = strconv.ParseFloat(s.Deploy.Resources.Limits.NanoCPUs, 64)
 			if err != nil {
 				return nil, err
 			}
@@ -314,12 +314,12 @@ func gbToBytes(memInBytes float64) uint64 {
 }
 
 // ContainerGroupToServiceStatus convert from an ACI container definition to service status
-func ContainerGroupToServiceStatus(containerID string, group containerinstance.ContainerGroup, container containerinstance.Container, region string) compose.ServiceStatus {
+func ContainerGroupToServiceStatus(containerID string, group containerinstance.ContainerGroup, container containerinstance.Container, region string) api.ServiceStatus {
 	var replicas = 1
 	if GetStatus(container, group) != StatusRunning {
 		replicas = 0
 	}
-	return compose.ServiceStatus{
+	return api.ServiceStatus{
 		ID:       containerID,
 		Name:     *container.Name,
 		Ports:    formatter.PortsToStrings(ToPorts(group.IPAddress, *container.Ports), FQDN(group, region)),
@@ -347,7 +347,7 @@ func ContainerGroupToContainer(containerID string, cg containerinstance.Containe
 	status := GetStatus(cc, cg)
 	platform := string(cg.OsType)
 
-	var envVars map[string]string = nil
+	var envVars map[string]string
 	if cc.EnvironmentVariables != nil && len(*cc.EnvironmentVariables) != 0 {
 		envVars = map[string]string{}
 		for _, envVar := range *cc.EnvironmentVariables {
@@ -452,5 +452,5 @@ func GetGroupStatus(group containerinstance.ContainerGroup) string {
 	if group.InstanceView != nil && group.InstanceView.State != nil {
 		return "Node " + *group.InstanceView.State
 	}
-	return compose.UNKNOWN
+	return api.UNKNOWN
 }

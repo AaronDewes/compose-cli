@@ -1,3 +1,4 @@
+//go:build kube
 // +build kube
 
 /*
@@ -26,7 +27,7 @@ import (
 
 	"gotest.tools/v3/assert"
 
-	"github.com/docker/compose-cli/api/compose"
+	"github.com/docker/compose/v2/pkg/api"
 )
 
 func TestPodToContainerSummary(t *testing.T) {
@@ -34,8 +35,8 @@ func TestPodToContainerSummary(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "c1-123",
 			Labels: map[string]string{
-				compose.ProjectTag: "myproject",
-				compose.ServiceTag: "service1",
+				api.ProjectLabel: "myproject",
+				api.ServiceLabel: "service1",
 			},
 		},
 		Status: v1.PodStatus{
@@ -45,7 +46,7 @@ func TestPodToContainerSummary(t *testing.T) {
 
 	container := podToContainerSummary(pod)
 
-	expected := compose.ContainerSummary{
+	expected := api.ContainerSummary{
 		ID:      "c1-123",
 		Name:    "c1-123",
 		Project: "myproject",

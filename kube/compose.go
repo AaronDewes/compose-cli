@@ -1,3 +1,4 @@
+//go:build kube
 // +build kube
 
 /*
@@ -24,12 +25,12 @@ import (
 	"strings"
 
 	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose/v2/pkg/api"
+	"github.com/docker/compose/v2/pkg/progress"
+	utils2 "github.com/docker/compose/v2/pkg/utils"
 
-	"github.com/docker/compose-cli/api/compose"
 	apicontext "github.com/docker/compose-cli/api/context"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/errdefs"
-	"github.com/docker/compose-cli/api/progress"
 	"github.com/docker/compose-cli/kube/client"
 	"github.com/docker/compose-cli/kube/helm"
 	"github.com/docker/compose-cli/kube/resources"
@@ -41,8 +42,8 @@ type composeService struct {
 	client *client.KubeClient
 }
 
-// NewComposeService create a kubernetes implementation of the compose.Service API
-func NewComposeService() (compose.Service, error) {
+// NewComposeService create a kubernetes implementation of the api.Service API
+func NewComposeService() (api.Service, error) {
 	contextStore := store.Instance()
 	currentContext := apicontext.Current()
 	var kubeContext store.KubeContext
@@ -70,10 +71,40 @@ func NewComposeService() (compose.Service, error) {
 }
 
 // Up executes the equivalent to a `compose up`
-func (s *composeService) Up(ctx context.Context, project *types.Project, options compose.UpOptions) error {
+func (s *composeService) Up(ctx context.Context, project *types.Project, options api.UpOptions) error {
+	if err := checkUnsupportedUpOptions(ctx, options); err != nil {
+		return err
+	}
+	return progress.Run(ctx, func(ctx context.Context) error {
+		return s.up(ctx, project)
+	})
+}
+
+func checkUnsupportedUpOptions(ctx context.Context, o api.UpOptions) error {
+	var errs error
+	checks := []struct {
+		toCheck, expected interface{}
+		option            string
+	}{
+		{o.Create.Inherit, true, "renew-anon-volumes"},
+		{o.Create.RemoveOrphans, false, "remove-orphans"},
+		{o.Create.QuietPull, false, "quiet-pull"},
+		{o.Create.Recreate, api.RecreateDiverged, "force-recreate"},
+		{o.Create.RecreateDependencies, api.RecreateDiverged, "always-recreate-deps"},
+		{len(o.Start.AttachTo), 0, "attach-dependencies"},
+		{len(o.Start.ExitCodeFrom), 0, "exit-code-from"},
+		{o.Create.Timeout, nil, "timeout"},
+	}
+	for _, c := range checks {
+		errs = utils.CheckUnsupported(ctx, errs, c.toCheck, c.expected, "up", c.option)
+	}
+	return errs
+}
+
+func (s *composeService) up(ctx context.Context, project *types.Project) error {
 	w := progress.ContextWriter(ctx)
 
-	eventName := "Convert to Helm charts"
+	eventName := "Convert Compose file to Helm charts"
 	w.Event(progress.CreatingEvent(eventName))
 
 	chart, err := helm.GetChartInMemory(project)
@@ -82,22 +113,37 @@ func (s *composeService) Up(ctx context.Context, project *types.Project, options
 	}
 	w.Event(progress.NewEvent(eventName, progress.Done, ""))
 
-	eventName = "Install Helm charts"
-	w.Event(progress.CreatingEvent(eventName))
+	stack, err := s.sdk.Get(project.Name)
+	if err != nil || stack == nil {
+		// install stack
+		eventName = "Install Compose stack"
+		w.Event(progress.CreatingEvent(eventName))
 
-	err = s.sdk.InstallChart(project.Name, chart, func(format string, v ...interface{}) {
-		message := fmt.Sprintf(format, v...)
-		w.Event(progress.NewEvent(eventName, progress.Done, message))
-	})
+		err = s.sdk.InstallChart(project.Name, chart, func(format string, v ...interface{}) {
+			message := fmt.Sprintf(format, v...)
+			w.Event(progress.NewEvent(eventName, progress.Done, message))
+		})
+
+	} else {
+		// update stack
+		eventName = "Updating Compose stack"
+		w.Event(progress.CreatingEvent(eventName))
+
+		err = s.sdk.UpdateChart(project.Name, chart, func(format string, v ...interface{}) {
+			message := fmt.Sprintf(format, v...)
+			w.Event(progress.NewEvent(eventName, progress.Done, message))
+		})
+	}
 	if err != nil {
 		return err
 	}
+
 	w.Event(progress.NewEvent(eventName, progress.Done, ""))
 
 	return s.client.WaitForPodState(ctx, client.WaitForStatusOptions{
 		ProjectName: project.Name,
 		Services:    project.ServiceNames(),
-		Status:      compose.RUNNING,
+		Status:      api.RUNNING,
 		Log: func(pod string, stateReached bool, message string) {
 			state := progress.Done
 			if !stateReached {
@@ -109,9 +155,33 @@ func (s *composeService) Up(ctx context.Context, project *types.Project, options
 }
 
 // Down executes the equivalent to a `compose down`
-func (s *composeService) Down(ctx context.Context, projectName string, options compose.DownOptions) error {
-	w := progress.ContextWriter(ctx)
+func (s *composeService) Down(ctx context.Context, projectName string, options api.DownOptions) error {
+	if err := checkUnsupportedDownOptions(ctx, options); err != nil {
+		return err
+	}
+	return progress.Run(ctx, func(ctx context.Context) error {
+		return s.down(ctx, projectName, options)
+	})
+}
 
+func checkUnsupportedDownOptions(ctx context.Context, o api.DownOptions) error {
+	var errs error
+	checks := []struct {
+		toCheck, expected interface{}
+		option            string
+	}{
+		{o.Volumes, false, "volumes"},
+		{o.Images, "", "images"},
+		{o.RemoveOrphans, false, "remove-orphans"},
+	}
+	for _, c := range checks {
+		errs = utils.CheckUnsupported(ctx, errs, c.toCheck, c.expected, "down", c.option)
+	}
+	return errs
+}
+
+func (s *composeService) down(ctx context.Context, projectName string, options api.DownOptions) error {
+	w := progress.ContextWriter(ctx)
 	eventName := fmt.Sprintf("Remove %s", projectName)
 	w.Event(progress.CreatingEvent(eventName))
 
@@ -135,7 +205,7 @@ func (s *composeService) Down(ctx context.Context, projectName string, options c
 	err = s.client.WaitForPodState(ctx, client.WaitForStatusOptions{
 		ProjectName: projectName,
 		Services:    nil,
-		Status:      compose.REMOVING,
+		Status:      api.REMOVING,
 		Timeout:     options.Timeout,
 		Log: func(pod string, stateReached bool, message string) {
 			state := progress.Done
@@ -143,7 +213,7 @@ func (s *composeService) Down(ctx context.Context, projectName string, options c
 				state = progress.Working
 			}
 			w.Event(progress.NewEvent(pod, state, message))
-			if !utils.StringContains(events, pod) {
+			if !utils2.StringContains(events, pod) {
 				events = append(events, pod)
 			}
 		},
@@ -159,61 +229,91 @@ func (s *composeService) Down(ctx context.Context, projectName string, options c
 }
 
 // List executes the equivalent to a `docker stack ls`
-func (s *composeService) List(ctx context.Context, opts compose.ListOptions) ([]compose.Stack, error) {
+func (s *composeService) List(ctx context.Context, opts api.ListOptions) ([]api.Stack, error) {
+	if err := checkUnsupportedListOptions(ctx, opts); err != nil {
+		return nil, err
+	}
 	return s.sdk.ListReleases()
 }
 
+func checkUnsupportedListOptions(ctx context.Context, o api.ListOptions) error {
+	return utils.CheckUnsupported(ctx, nil, o.All, false, "ls", "all")
+}
+
 // Build executes the equivalent to a `compose build`
-func (s *composeService) Build(ctx context.Context, project *types.Project, options compose.BuildOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Build(ctx context.Context, project *types.Project, options api.BuildOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Push executes the equivalent ot a `compose push`
-func (s *composeService) Push(ctx context.Context, project *types.Project, options compose.PushOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Push(ctx context.Context, project *types.Project, options api.PushOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Pull executes the equivalent of a `compose pull`
-func (s *composeService) Pull(ctx context.Context, project *types.Project, options compose.PullOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Pull(ctx context.Context, project *types.Project, options api.PullOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Create executes the equivalent to a `compose create`
-func (s *composeService) Create(ctx context.Context, project *types.Project, opts compose.CreateOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Create(ctx context.Context, project *types.Project, opts api.CreateOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Start executes the equivalent to a `compose start`
-func (s *composeService) Start(ctx context.Context, project *types.Project, options compose.StartOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Start(ctx context.Context, project *types.Project, options api.StartOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Restart executes the equivalent to a `compose restart`
-func (s *composeService) Restart(ctx context.Context, project *types.Project, options compose.RestartOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Restart(ctx context.Context, project *types.Project, options api.RestartOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Stop executes the equivalent to a `compose stop`
-func (s *composeService) Stop(ctx context.Context, project *types.Project, options compose.StopOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Stop(ctx context.Context, project *types.Project, options api.StopOptions) error {
+	return api.ErrNotImplemented
+}
+
+// Copy copies a file/folder between a service container and the local filesystem
+func (s *composeService) Copy(ctx context.Context, project *types.Project, options api.CopyOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Logs executes the equivalent to a `compose logs`
-func (s *composeService) Logs(ctx context.Context, projectName string, consumer compose.LogConsumer, options compose.LogOptions) error {
+func (s *composeService) Logs(ctx context.Context, projectName string, consumer api.LogConsumer, options api.LogOptions) error {
+	if err := checkUnsupportedLogOptions(ctx, options); err != nil {
+		return err
+	}
 	if len(options.Services) > 0 {
 		consumer = utils.FilteredLogConsumer(consumer, options.Services)
 	}
 	return s.client.GetLogs(ctx, projectName, consumer, options.Follow)
 }
 
+func checkUnsupportedLogOptions(ctx context.Context, o api.LogOptions) error {
+	var errs error
+	checks := []struct {
+		toCheck, expected interface{}
+		option            string
+	}{
+		{o.Since, "", "since"},
+		{o.Timestamps, false, "timestamps"},
+		{o.Until, "", "until"},
+	}
+	for _, c := range checks {
+		errs = utils.CheckUnsupported(ctx, errs, c.toCheck, c.expected, "logs", c.option)
+	}
+	return errs
+}
+
 // Ps executes the equivalent to a `compose ps`
-func (s *composeService) Ps(ctx context.Context, projectName string, options compose.PsOptions) ([]compose.ContainerSummary, error) {
+func (s *composeService) Ps(ctx context.Context, projectName string, options api.PsOptions) ([]api.ContainerSummary, error) {
 	return s.client.GetContainers(ctx, projectName, options.All)
 }
 
 // Convert translate compose model into backend's native format
-func (s *composeService) Convert(ctx context.Context, project *types.Project, options compose.ConvertOptions) ([]byte, error) {
-
+func (s *composeService) Convert(ctx context.Context, project *types.Project, options api.ConvertOptions) ([]byte, error) {
 	chart, err := helm.GetChartInMemory(project)
 	if err != nil {
 		return nil, err
@@ -234,44 +334,55 @@ func (s *composeService) Convert(ctx context.Context, project *types.Project, op
 	return buff, nil
 }
 
-func (s *composeService) Kill(ctx context.Context, project *types.Project, options compose.KillOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Kill(ctx context.Context, project *types.Project, options api.KillOptions) error {
+	return api.ErrNotImplemented
 }
 
 // RunOneOffContainer creates a service oneoff container and starts its dependencies
-func (s *composeService) RunOneOffContainer(ctx context.Context, project *types.Project, opts compose.RunOptions) (int, error) {
-	return 0, errdefs.ErrNotImplemented
+func (s *composeService) RunOneOffContainer(ctx context.Context, project *types.Project, opts api.RunOptions) (int, error) {
+	return 0, api.ErrNotImplemented
 }
 
-func (s *composeService) Remove(ctx context.Context, project *types.Project, options compose.RemoveOptions) ([]string, error) {
-	return nil, errdefs.ErrNotImplemented
+func (s *composeService) Remove(ctx context.Context, project *types.Project, options api.RemoveOptions) error {
+	return api.ErrNotImplemented
 }
 
 // Exec executes a command in a running service container
-func (s *composeService) Exec(ctx context.Context, project *types.Project, opts compose.RunOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Exec(ctx context.Context, project string, opts api.RunOptions) (int, error) {
+	if err := checkUnsupportedExecOptions(ctx, opts); err != nil {
+		return 0, err
+	}
+	return 0, s.client.Exec(ctx, project, opts)
 }
 
-func (s *composeService) Pause(ctx context.Context, project string, options compose.PauseOptions) error {
-	return errdefs.ErrNotImplemented
+func checkUnsupportedExecOptions(ctx context.Context, o api.RunOptions) error {
+	var errs error
+	errs = utils.CheckUnsupported(ctx, errs, o.Index, 0, "exec", "index")
+	errs = utils.CheckUnsupported(ctx, errs, o.Privileged, false, "exec", "privileged")
+	errs = utils.CheckUnsupported(ctx, errs, o.WorkingDir, "", "exec", "workdir")
+	return errs
 }
 
-func (s *composeService) UnPause(ctx context.Context, project string, options compose.PauseOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Pause(ctx context.Context, project string, options api.PauseOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (s *composeService) Top(ctx context.Context, projectName string, services []string) ([]compose.ContainerProcSummary, error) {
-	return nil, errdefs.ErrNotImplemented
+func (s *composeService) UnPause(ctx context.Context, project string, options api.PauseOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (s *composeService) Events(ctx context.Context, project string, options compose.EventsOptions) error {
-	return errdefs.ErrNotImplemented
+func (s *composeService) Top(ctx context.Context, projectName string, services []string) ([]api.ContainerProcSummary, error) {
+	return nil, api.ErrNotImplemented
 }
 
-func (s *composeService) Port(ctx context.Context, project string, service string, port int, options compose.PortOptions) (string, int, error) {
-	return "", 0, errdefs.ErrNotImplemented
+func (s *composeService) Events(ctx context.Context, project string, options api.EventsOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (s *composeService) Images(ctx context.Context, projectName string, options compose.ImagesOptions) ([]compose.ImageSummary, error) {
-	return nil, errdefs.ErrNotImplemented
+func (s *composeService) Port(ctx context.Context, project string, service string, port int, options api.PortOptions) (string, int, error) {
+	return "", 0, api.ErrNotImplemented
+}
+
+func (s *composeService) Images(ctx context.Context, projectName string, options api.ImagesOptions) ([]api.ImageSummary, error) {
+	return nil, api.ErrNotImplemented
 }

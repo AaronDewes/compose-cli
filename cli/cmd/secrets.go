@@ -19,14 +19,13 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
+	"github.com/docker/compose/v2/cmd/formatter"
 	"github.com/spf13/cobra"
 
 	"github.com/docker/compose-cli/api/client"
 	"github.com/docker/compose-cli/api/secrets"
-	"github.com/docker/compose-cli/cli/formatter"
 )
 
 // SecretCommand manage secrets
@@ -73,7 +72,7 @@ func createSecret() *cobra.Command {
 				}
 				defer func() { _ = in.Close() }()
 			}
-			content, err := ioutil.ReadAll(in)
+			content, err := io.ReadAll(in)
 			if err != nil {
 				return fmt.Errorf("failed to read content from %q: %v", file, err)
 			}

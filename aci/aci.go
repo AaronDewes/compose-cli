@@ -29,6 +29,8 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	tm "github.com/buger/goterm"
 	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose/v2/pkg/api"
+	"github.com/docker/compose/v2/pkg/progress"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/morikuni/aec"
@@ -39,8 +41,6 @@ import (
 	"github.com/docker/compose-cli/api/client"
 	"github.com/docker/compose-cli/api/containers"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/errdefs"
-	"github.com/docker/compose-cli/api/progress"
 )
 
 func createACIContainers(ctx context.Context, aciContext store.AciContext, groupDefinition containerinstance.ContainerGroup) error {
@@ -85,7 +85,7 @@ func autocreateFileshares(ctx context.Context, project *types.Project) error {
 		}
 		_, err = clt.VolumeService().Inspect(ctx, fmt.Sprintf("%s/%s", accountName, shareName))
 		if err != nil { // Not found, autocreate fileshare
-			if !errdefs.IsNotFoundError(err) {
+			if !api.IsNotFoundError(err) {
 				return err
 			}
 			aciVolumeOpts := &VolumeCreateOptions{
@@ -198,7 +198,7 @@ func stopACIContainerGroup(ctx context.Context, aciContext store.AciContext, con
 
 	result, err := containerGroupsClient.Stop(ctx, aciContext.ResourceGroup, containerGroupName)
 	if result.IsHTTPStatus(http.StatusNotFound) {
-		return errdefs.ErrNotFound
+		return api.ErrNotFound
 	}
 	return err
 }

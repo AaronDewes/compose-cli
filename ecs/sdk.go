@@ -24,11 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/compose-cli/api/compose"
-	"github.com/docker/compose-cli/api/errdefs"
-	"github.com/docker/compose-cli/api/secrets"
-	"github.com/docker/compose-cli/internal"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -56,10 +51,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/aws-sdk-go/service/ssm/ssmiface"
+	"github.com/docker/compose/v2/pkg/api"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/go-uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/docker/compose-cli/api/secrets"
+	"github.com/docker/compose-cli/internal"
 )
 
 type sdk struct {
@@ -80,9 +79,12 @@ type sdk struct {
 // sdk implement API
 var _ API = sdk{}
 
+// UserAgentName is the ECS specific user agent used by the cli
+const UserAgentName = "Docker CLI"
+
 func newSDK(sess *session.Session) sdk {
 	sess.Handlers.Build.PushBack(func(r *request.Request) {
-		request.AddToUserAgent(r, internal.ECSUserAgentName+"/"+internal.Version)
+		request.AddToUserAgent(r, UserAgentName+"/"+internal.Version)
 	})
 	return sdk{
 		ECS:      ecs.New(sess),
@@ -126,7 +128,7 @@ func (s sdk) ResolveCluster(ctx context.Context, nameOrArn string) (awsResource,
 		return nil, err
 	}
 	if len(clusters.Clusters) == 0 {
-		return nil, errors.Wrapf(errdefs.ErrNotFound, "cluster %q does not exist", nameOrArn)
+		return nil, errors.Wrapf(api.ErrNotFound, "cluster %q does not exist", nameOrArn)
 	}
 	it := clusters.Clusters[0]
 	return existingAWSResource{
@@ -341,7 +343,7 @@ func (s sdk) CreateStack(ctx context.Context, name string, region string, templa
 			},
 			Tags: []*cloudformation.Tag{
 				{
-					Key:   aws.String(compose.ProjectTag),
+					Key:   aws.String(api.ProjectLabel),
 					Value: aws.String(name),
 				},
 			},
@@ -444,10 +446,10 @@ func (s sdk) GetStackID(ctx context.Context, name string) (string, error) {
 	return *stacks.Stacks[0].StackId, nil
 }
 
-func (s sdk) ListStacks(ctx context.Context) ([]compose.Stack, error) {
+func (s sdk) ListStacks(ctx context.Context) ([]api.Stack, error) {
 	params := cloudformation.DescribeStacksInput{}
 	var token *string
-	var stacks []compose.Stack
+	var stacks []api.Stack
 	for {
 		response, err := s.CF.DescribeStacksWithContext(ctx, &params)
 		if err != nil {
@@ -455,18 +457,18 @@ func (s sdk) ListStacks(ctx context.Context) ([]compose.Stack, error) {
 		}
 		for _, stack := range response.Stacks {
 			for _, t := range stack.Tags {
-				if *t.Key == compose.ProjectTag {
-					status := compose.RUNNING
+				if *t.Key == api.ProjectLabel {
+					status := api.RUNNING
 					switch aws.StringValue(stack.StackStatus) {
 					case "CREATE_IN_PROGRESS":
-						status = compose.STARTING
+						status = api.STARTING
 					case "DELETE_IN_PROGRESS":
-						status = compose.REMOVING
+						status = api.REMOVING
 					case "UPDATE_IN_PROGRESS":
-						status = compose.UPDATING
+						status = api.UPDATING
 					default:
 					}
-					stacks = append(stacks, compose.Stack{
+					stacks = append(stacks, api.Stack{
 						ID:     aws.StringValue(stack.StackId),
 						Name:   aws.StringValue(stack.StackName),
 						Status: status,
@@ -516,7 +518,7 @@ func (s sdk) GetStackClusterID(ctx context.Context, stack string) (string, error
 		return "", err
 	}
 	if m.Cluster == "" {
-		return "", errors.Wrap(errdefs.ErrNotFound, "CloudFormation is missing cluster metadata")
+		return "", errors.Wrap(api.ErrNotFound, "CloudFormation is missing cluster metadata")
 	}
 
 	return m.Cluster, nil
@@ -844,28 +846,28 @@ func (s sdk) GetLogs(ctx context.Context, name string, consumer func(container s
 	}
 }
 
-func (s sdk) DescribeService(ctx context.Context, cluster string, arn string) (compose.ServiceStatus, error) {
+func (s sdk) DescribeService(ctx context.Context, cluster string, arn string) (api.ServiceStatus, error) {
 	services, err := s.ECS.DescribeServicesWithContext(ctx, &ecs.DescribeServicesInput{
 		Cluster:  aws.String(cluster),
 		Services: []*string{aws.String(arn)},
 		Include:  aws.StringSlice([]string{"TAGS"}),
 	})
 	if err != nil {
-		return compose.ServiceStatus{}, err
+		return api.ServiceStatus{}, err
 	}
 
 	for _, f := range services.Failures {
-		return compose.ServiceStatus{}, errors.Wrapf(errdefs.ErrNotFound, "can't get service status %s: %s", aws.StringValue(f.Detail), aws.StringValue(f.Reason))
+		return api.ServiceStatus{}, errors.Wrapf(api.ErrNotFound, "can't get service status %s: %s", aws.StringValue(f.Detail), aws.StringValue(f.Reason))
 	}
 	service := services.Services[0]
 	var name string
 	for _, t := range service.Tags {
-		if *t.Key == compose.ServiceTag {
+		if *t.Key == api.ServiceLabel {
 			name = aws.StringValue(t.Value)
 		}
 	}
 	if name == "" {
-		return compose.ServiceStatus{}, fmt.Errorf("service %s doesn't have a %s tag", *service.ServiceArn, compose.ServiceTag)
+		return api.ServiceStatus{}, fmt.Errorf("service %s doesn't have a %s tag", *service.ServiceArn, api.ServiceLabel)
 	}
 	targetGroupArns := []string{}
 	for _, lb := range service.LoadBalancers {
@@ -875,9 +877,9 @@ func (s sdk) DescribeService(ctx context.Context, cluster string, arn string) (c
 	// one to get the target groups and another for load balancers
 	loadBalancers, err := s.getURLWithPortMapping(ctx, targetGroupArns)
 	if err != nil {
-		return compose.ServiceStatus{}, err
+		return api.ServiceStatus{}, err
 	}
-	return compose.ServiceStatus{
+	return api.ServiceStatus{
 		ID:         aws.StringValue(service.ServiceName),
 		Name:       name,
 		Replicas:   int(aws.Int64Value(service.RunningCount)),
@@ -886,8 +888,8 @@ func (s sdk) DescribeService(ctx context.Context, cluster string, arn string) (c
 	}, nil
 }
 
-func (s sdk) DescribeServiceTasks(ctx context.Context, cluster string, project string, service string) ([]compose.ContainerSummary, error) {
-	var summary []compose.ContainerSummary
+func (s sdk) DescribeServiceTasks(ctx context.Context, cluster string, project string, service string) ([]api.ContainerSummary, error) {
+	var summary []api.ContainerSummary
 	familly := fmt.Sprintf("%s-%s", project, service)
 	var token *string
 	for {
@@ -919,9 +921,9 @@ func (s sdk) DescribeServiceTasks(ctx context.Context, cluster string, project s
 			var service string
 			for _, tag := range t.Tags {
 				switch aws.StringValue(tag.Key) {
-				case compose.ProjectTag:
+				case api.ProjectLabel:
 					project = aws.StringValue(tag.Value)
-				case compose.ServiceTag:
+				case api.ServiceLabel:
 					service = aws.StringValue(tag.Value)
 				}
 			}
@@ -931,12 +933,13 @@ func (s sdk) DescribeServiceTasks(ctx context.Context, cluster string, project s
 				return nil, err
 			}
 
-			summary = append(summary, compose.ContainerSummary{
+			summary = append(summary, api.ContainerSummary{
 				ID:      id.String(),
 				Name:    id.Resource,
 				Project: project,
 				Service: service,
-				State:   strings.Title(strings.ToLower(aws.StringValue(t.LastStatus))),
+				//nolint:staticcheck // Preserving for compatibility
+				State: strings.Title(strings.ToLower(aws.StringValue(t.LastStatus))),
 			})
 		}
 
@@ -949,7 +952,7 @@ func (s sdk) DescribeServiceTasks(ctx context.Context, cluster string, project s
 	return summary, nil
 }
 
-func (s sdk) getURLWithPortMapping(ctx context.Context, targetGroupArns []string) ([]compose.PortPublisher, error) {
+func (s sdk) getURLWithPortMapping(ctx context.Context, targetGroupArns []string) ([]api.PortPublisher, error) {
 	if len(targetGroupArns) == 0 {
 		return nil, nil
 	}
@@ -983,14 +986,14 @@ func (s sdk) getURLWithPortMapping(ctx context.Context, targetGroupArns []string
 		}
 		return nil
 	}
-	loadBalancers := []compose.PortPublisher{}
+	loadBalancers := []api.PortPublisher{}
 	for _, tg := range groups.TargetGroups {
 		for _, lbarn := range tg.LoadBalancerArns {
 			lb := filterLB(lbarn, lbs.LoadBalancers)
 			if lb == nil {
 				continue
 			}
-			loadBalancers = append(loadBalancers, compose.PortPublisher{
+			loadBalancers = append(loadBalancers, api.PortPublisher{
 				URL:           fmt.Sprintf("%s:%d", aws.StringValue(lb.DNSName), aws.Int64Value(tg.Port)),
 				TargetPort:    int(aws.Int64Value(tg.Port)),
 				PublishedPort: int(aws.Int64Value(tg.Port)),
@@ -1063,7 +1066,7 @@ func (s sdk) ResolveLoadBalancer(ctx context.Context, nameOrArn string) (awsReso
 		return nil, "", "", nil, err
 	}
 	if len(lbs.LoadBalancers) == 0 {
-		return nil, "", "", nil, errors.Wrapf(errdefs.ErrNotFound, "load balancer %q does not exist", nameOrArn)
+		return nil, "", "", nil, errors.Wrapf(api.ErrNotFound, "load balancer %q does not exist", nameOrArn)
 	}
 	it := lbs.LoadBalancers[0]
 	var subNets []awsResource
@@ -1151,7 +1154,7 @@ func (s sdk) ResolveFileSystem(ctx context.Context, id string) (awsResource, err
 		return nil, err
 	}
 	if len(desc.FileSystems) == 0 {
-		return nil, errors.Wrapf(errdefs.ErrNotFound, "EFS file system %q doesn't exist", id)
+		return nil, errors.Wrapf(api.ErrNotFound, "EFS file system %q doesn't exist", id)
 	}
 	it := desc.FileSystems[0]
 	return existingAWSResource{

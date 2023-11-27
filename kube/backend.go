@@ -1,3 +1,4 @@
+//go:build kube
 // +build kube
 
 /*
@@ -19,9 +20,10 @@
 package kube
 
 import (
+	"github.com/docker/compose/v2/pkg/api"
+
 	"github.com/docker/compose-cli/api/backend"
 	"github.com/docker/compose-cli/api/cloud"
-	"github.com/docker/compose-cli/api/compose"
 	"github.com/docker/compose-cli/api/containers"
 	"github.com/docker/compose-cli/api/context/store"
 	"github.com/docker/compose-cli/api/resources"
@@ -32,7 +34,7 @@ import (
 const backendType = store.KubeContextType
 
 type kubeAPIService struct {
-	composeService compose.Service
+	composeService api.Service
 }
 
 func init() {
@@ -53,7 +55,7 @@ func (s *kubeAPIService) ContainerService() containers.Service {
 	return nil
 }
 
-func (s *kubeAPIService) ComposeService() compose.Service {
+func (s *kubeAPIService) ComposeService() api.Service {
 	return s.composeService
 }
 

@@ -19,7 +19,7 @@ package convert
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 
@@ -43,7 +43,7 @@ func (p projectAciHelper) getAciSecretVolumes() ([]containerinstance.Volume, err
 	for _, svc := range p.Services {
 		squashedTargetVolumes := make(map[string]containerinstance.Volume)
 		for _, scr := range svc.Secrets {
-			data, err := ioutil.ReadFile(p.Secrets[scr.Source].File)
+			data, err := os.ReadFile(p.Secrets[scr.Source].File)
 			if err != nil {
 				return secretVolumes, err
 			}
@@ -136,7 +136,7 @@ func validateMountPathCollisions(vms []containerinstance.VolumeMount) error {
 				}
 			}
 			if isPrefixed {
-				return errors.Errorf("mount paths %q and %q collide. A volume mount cannot include another one.", *vm1.MountPath, *vm2.MountPath)
+				return errors.Errorf("mount paths %q and %q collide. A volume mount cannot include another one", *vm1.MountPath, *vm2.MountPath)
 			}
 		}
 	}

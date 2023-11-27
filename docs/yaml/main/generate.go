@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,7 +26,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/docker/compose-cli/cli/cmd/compose"
+	"github.com/docker/compose/v2/cmd/compose"
+
 	. "github.com/docker/compose-cli/docs/yaml"
 )
 
@@ -35,7 +35,7 @@ const descriptionSourcePath = "docs/reference/"
 
 func generateCliYaml(opts *options) error {
 	cmd := &cobra.Command{Use: "docker"}
-	cmd.AddCommand(compose.Command("local"))
+	cmd.AddCommand(compose.RootCommand(nil))
 	disableFlagsInUseLine(cmd)
 	source := filepath.Join(opts.source, descriptionSourcePath)
 	if err := loadLongDescription(cmd, source); err != nil {
@@ -81,7 +81,7 @@ func loadLongDescription(cmd *cobra.Command, path ...string) error {
 			continue
 		}
 
-		content, err := ioutil.ReadFile(fullpath)
+		content, err := os.ReadFile(fullpath)
 		if err != nil {
 			return err
 		}

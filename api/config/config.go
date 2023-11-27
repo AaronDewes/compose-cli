@@ -18,7 +18,6 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -26,6 +25,12 @@ import (
 
 	"github.com/docker/compose-cli/api/context/store"
 )
+
+// ContextKey defines a type for keys in the context passed
+type ContextKey string
+
+// ContextTypeKey is the key for context type stored in context.Context
+const ContextTypeKey ContextKey = "context_type"
 
 var configDir string
 
@@ -72,12 +77,12 @@ func writeFile(path string, content map[string]interface{}) error {
 	if err != nil {
 		return errors.Wrap(err, "unable to marshal config")
 	}
-	err = ioutil.WriteFile(path, d, 0644)
+	err = os.WriteFile(path, d, 0644)
 	return errors.Wrap(err, "unable to write config file")
 }
 
 func loadFile(path string, dest interface{}) error {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Not an error if there is no config, we're just using defaults
@@ -95,5 +100,6 @@ func configFilePath(dir string) string {
 
 // File contains the current context from the docker configuration file
 type File struct {
-	CurrentContext string `json:"currentContext,omitempty"`
+	CurrentContext string                       `json:"currentContext,omitempty"`
+	Plugins        map[string]map[string]string `json:"plugins,omitempty"`
 }

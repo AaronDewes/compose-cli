@@ -19,13 +19,13 @@ package context
 import (
 	"context"
 
+	"github.com/docker/compose/v2/pkg/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/docker/compose-cli/aci"
 	"github.com/docker/compose-cli/api/client"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/errdefs"
 )
 
 func init() {
@@ -49,8 +49,8 @@ func createAciCommand() *cobra.Command {
 	}
 
 	addDescriptionFlag(cmd, &opts.Description)
-	cmd.Flags().StringVar(&opts.Location, "location", "eastus", "Location")
-	cmd.Flags().StringVar(&opts.SubscriptionID, "subscription-id", "", "Location")
+	cmd.Flags().StringVar(&opts.Location, "location", "", "Location")
+	cmd.Flags().StringVar(&opts.SubscriptionID, "subscription-id", "", "Subscription id")
 	cmd.Flags().StringVar(&opts.ResourceGroup, "resource-group", "", "Resource group")
 
 	return cmd
@@ -58,7 +58,7 @@ func createAciCommand() *cobra.Command {
 
 func runCreateAci(ctx context.Context, contextName string, opts aci.ContextParams) error {
 	if contextExists(contextName) {
-		return errors.Wrapf(errdefs.ErrAlreadyExists, "context %s", contextName)
+		return errors.Wrapf(api.ErrAlreadyExists, "context %s", contextName)
 	}
 	contextData, description, err := getAciContextData(ctx, opts)
 	if err != nil {

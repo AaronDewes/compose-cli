@@ -17,24 +17,26 @@
 package aci
 
 import (
+	"os"
 	"strings"
+
+	"github.com/docker/compose-cli/utils"
 
 	"github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2019-12-01/containerinstance"
 	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/docker/compose/v2/pkg/api"
 	"github.com/pkg/errors"
 
 	"github.com/docker/compose-cli/aci/convert"
 	"github.com/docker/compose-cli/aci/login"
 	"github.com/docker/compose-cli/api/backend"
-	"github.com/docker/compose-cli/api/compose"
+	"github.com/docker/compose-cli/api/cloud"
 	"github.com/docker/compose-cli/api/containers"
+	apicontext "github.com/docker/compose-cli/api/context"
+	"github.com/docker/compose-cli/api/context/store"
 	"github.com/docker/compose-cli/api/resources"
 	"github.com/docker/compose-cli/api/secrets"
 	"github.com/docker/compose-cli/api/volumes"
-
-	"github.com/docker/compose-cli/api/cloud"
-	apicontext "github.com/docker/compose-cli/api/context"
-	"github.com/docker/compose-cli/api/context/store"
 )
 
 const (
@@ -68,6 +70,7 @@ func init() {
 }
 
 func service() (backend.Service, error) {
+	utils.ShowDeprecationWarning(os.Stderr)
 	contextStore := store.Instance()
 	currentContext := apicontext.Current()
 	var aciContext store.AciContext
@@ -115,7 +118,7 @@ func (a *aciAPIService) ContainerService() containers.Service {
 	return a.aciContainerService
 }
 
-func (a *aciAPIService) ComposeService() compose.Service {
+func (a *aciAPIService) ComposeService() api.Service {
 	return a.aciComposeService
 }
 

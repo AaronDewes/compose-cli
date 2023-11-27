@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 
+	format "github.com/docker/compose/v2/cmd/formatter"
+
+	"github.com/docker/compose/v2/pkg/progress"
+
 	"github.com/docker/compose-cli/aci"
 	"github.com/docker/compose-cli/api/client"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/progress"
-	"github.com/docker/compose-cli/cli/formatter"
-	formatter2 "github.com/docker/compose-cli/cli/formatter"
 	"github.com/docker/compose-cli/ecs"
 
 	"github.com/hashicorp/go-multierror"
@@ -74,7 +75,7 @@ func createVolume(ctype string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			result, err := progress.Run(ctx, func(ctx context.Context) (string, error) {
+			result, err := progress.RunWithStatus(ctx, func(ctx context.Context) (string, error) {
 				volume, err := c.VolumeService().Create(ctx, args[0], opts)
 				if err != nil {
 					return "", err
@@ -125,7 +126,7 @@ func rmVolume() *cobra.Command {
 				}
 				fmt.Println(id)
 			}
-			formatter.SetMultiErrorFormat(errs)
+			format.SetMultiErrorFormat(errs)
 			return errs.ErrorOrNil()
 		},
 	}
@@ -146,7 +147,7 @@ func inspectVolume() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			outJSON, err := formatter2.ToStandardJSON(v)
+			outJSON, err := format.ToStandardJSON(v)
 			if err != nil {
 				return err
 			}

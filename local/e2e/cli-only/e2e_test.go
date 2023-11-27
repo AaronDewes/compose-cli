@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,6 +29,7 @@ import (
 	"gotest.tools/v3/golden"
 	"gotest.tools/v3/icmd"
 
+	"github.com/docker/compose-cli/cli/mobycli"
 	. "github.com/docker/compose-cli/utils/e2e"
 )
 
@@ -205,9 +205,25 @@ func TestContextMetrics(t *testing.T) {
 			`{"command":"context use","context":"moby","source":"cli","status":"success"}`,
 			`{"command":"ps","context":"local","source":"cli","status":"success"}`,
 			`{"command":"stop","context":"local","source":"cli","status":"failure"}`,
-			`{"command":"context use","context":"local","source":"cli","status":"success"}`,
+			`{"command":"context use","context":"moby","source":"cli","status":"success"}`,
 			`{"command":"ps","context":"local","source":"cli","status":"success"}`,
 			`{"command":"context ls","context":"moby","source":"cli","status":"success"}`,
+		}, usage)
+	})
+
+	t.Run("metrics on build", func(t *testing.T) {
+		s.ResetUsage()
+
+		_ = os.Setenv("BUILDX_CONFIG", "./testdata/buildx-config")
+		c.RunDockerOrExitError("build", "-t", "foo:bar", ".")
+		c.RunDockerOrExitError("buildx", "build", "-t", "foo:bar", ".")
+		c.RunDockerOrExitError("buildx", "--builder", "graviton2", "build", "-t", "foo:bar", ".")
+
+		usage := s.GetUsage()
+		assert.DeepEqual(t, []string{
+			`{"command":"build","context":"moby","source":"cli-docker;buildkit","status":"failure"}`,
+			`{"command":"buildx build","context":"moby","source":"cli-buildx;docker-container","status":"failure"}`,
+			`{"command":"buildx --builder build","context":"moby","source":"cli-buildx;docker-container","status":"failure"}`,
 		}, usage)
 	})
 }
@@ -233,7 +249,7 @@ func TestContextRemove(t *testing.T) {
 		res = c.RunDockerOrExitError("context", "rm", "test-context-rm")
 		res.Assert(t, icmd.Expected{
 			ExitCode: 1,
-			Err:      "cannot delete current context",
+			Err:      "test-context-rm: context is in use, set -f flag to force remove",
 		})
 	})
 
@@ -309,13 +325,13 @@ func TestLoginCommandDelegation(t *testing.T) {
 
 func TestMissingExistingCLI(t *testing.T) {
 	t.Parallel()
-	home, err := ioutil.TempDir("", "")
+	home, err := os.MkdirTemp("", "")
 	assert.NilError(t, err)
 	t.Cleanup(func() {
 		_ = os.RemoveAll(home)
 	})
 
-	bin, err := ioutil.TempDir("", "")
+	bin, err := os.MkdirTemp("", "")
 	assert.NilError(t, err)
 	t.Cleanup(func() {
 		_ = os.RemoveAll(bin)
@@ -338,7 +354,7 @@ func TestMissingExistingCLI(t *testing.T) {
 	res := icmd.RunCmd(c)
 	res.Assert(t, icmd.Expected{
 		ExitCode: 1,
-		Err:      `"com.docker.cli": executable file not found`,
+		Err:      fmt.Sprintf(`"%s": executable file not found`, mobycli.ComDockerCli),
 	})
 }
 

@@ -23,12 +23,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/docker/compose/v2/cmd/formatter"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	apicontext "github.com/docker/compose-cli/api/context"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/cli/formatter"
 	"github.com/docker/compose-cli/cli/mobycli"
 )
 

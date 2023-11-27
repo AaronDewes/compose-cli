@@ -1,25 +1,40 @@
-# Docker Compose CLI
+## :warning: Retirement Date Pending
+
+Docker Compose's integration for ECS and ACI retired in November 2023. For now, our main priority in this repository are critical security fixes.
+
+ECS users can consider using [compose-ecs](https://github.com/docker/compose-ecs).
+
+
+# Docker Compose "Cloud Integrations"
 
 [![Actions Status](https://github.com/docker/compose-cli/workflows/Continuous%20integration/badge.svg)](https://github.com/docker/compose-cli/actions)
 [![Actions Status](https://github.com/docker/compose-cli/workflows/Windows%20CI/badge.svg)](https://github.com/docker/compose-cli/actions)
 
-This CLI tool makes it easy to run Docker containers and Docker Compose applications in the cloud using either Amazon
-Elastic Container Service
+
+This Compose CLI tool makes it easy to run Docker containers and Docker Compose applications in the cloud using either :
+- Amazon Elastic Container Service
 ([ECS](https://aws.amazon.com/ecs))
-or Microsoft Azure Container Instances
+- Microsoft Azure Container Instances
 ([ACI](https://azure.microsoft.com/services/container-instances))
-using the Docker commands you already know.
+- Kubernetes (Work in progress)
 
-To get started, all you need is:
+...using the Docker commands you already know.
+  
+## :warning: Compose v2 (a.k.a "Local Docker Compose") has Moved
 
-* An [AWS](https://aws.amazon.com) or [Azure](https://azure.microsoft.com)
-  account
-* Windows: The Stable or Edge release of
-  [Docker Desktop](https://hub.docker.com/editions/community/docker-ce-desktop-windows)
-* macOS: The Stable or Edge release of
-  [Docker Desktop](https://hub.docker.com/editions/community/docker-ce-desktop-mac)
+This repository is about "Cloud Integrations", the Docker Compose v2
+code has moved to [github.com/docker/compose](https://github.com/docker/compose/tree/v2) 
+
+## Getting started
+
+To get started with Compose CLI, all you need is:
+
+* macOS, Windows, or Windows WSL2: The current release of
+  [Docker Desktop](https://www.docker.com/products/docker-desktop)
 * Linux:
   [Install script](INSTALL.md)
+* An [AWS](https://aws.amazon.com) or [Azure](https://azure.microsoft.com)
+  account in order to use the Compose Cloud integration
 
 Please create [issues](https://github.com/docker/compose-cli/issues) to leave feedback.
 

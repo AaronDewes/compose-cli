@@ -19,13 +19,9 @@ package ecs
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"regexp"
 	"strings"
-
-	"github.com/docker/compose-cli/api/compose"
-	"github.com/docker/compose-cli/api/config"
-	"github.com/docker/compose-cli/api/errdefs"
 
 	ecsapi "github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/aws/aws-sdk-go/service/elbv2"
@@ -42,16 +38,19 @@ import (
 	"github.com/compose-spec/compose-go/types"
 	"github.com/distribution/distribution/v3/reference"
 	cliconfig "github.com/docker/cli/cli/config"
+	"github.com/docker/compose/v2/pkg/api"
 	"github.com/opencontainers/go-digest"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 	"sigs.k8s.io/kustomize/kyaml/yaml/merge2"
+
+	"github.com/docker/compose-cli/api/config"
+	"github.com/docker/compose-cli/utils"
 )
 
-func (b *ecsAPIService) Kill(ctx context.Context, project *types.Project, options compose.KillOptions) error {
-	return errdefs.ErrNotImplemented
-}
-
-func (b *ecsAPIService) Convert(ctx context.Context, project *types.Project, options compose.ConvertOptions) ([]byte, error) {
+func (b *ecsAPIService) Convert(ctx context.Context, project *types.Project, options api.ConvertOptions) ([]byte, error) {
+	if err := checkUnsupportedConvertOptions(ctx, options); err != nil {
+		return nil, err
+	}
 	err := b.resolveServiceImagesDigests(ctx, project)
 	if err != nil {
 		return nil, err
@@ -101,6 +100,10 @@ func (b *ecsAPIService) Convert(ctx context.Context, project *types.Project, opt
 	}
 	bytes = []byte(s)
 	return bytes, err
+}
+
+func checkUnsupportedConvertOptions(ctx context.Context, o api.ConvertOptions) error {
+	return utils.CheckUnsupported(ctx, nil, o.Output, "", "convert", "output")
 }
 
 func (b *ecsAPIService) resolveServiceImagesDigests(ctx context.Context, project *types.Project) error {
@@ -171,7 +174,10 @@ func (b *ecsAPIService) convert(ctx context.Context, project *types.Project) (*c
 
 func (b *ecsAPIService) createService(project *types.Project, service types.ServiceConfig, template *cloudformation.Template, resources awsResources) error {
 	taskExecutionRole := b.createTaskExecutionRole(project, service, template)
-	taskRole := b.createTaskRole(project, service, template, resources)
+	taskRole, err := b.createTaskRole(project, service, template, resources)
+	if err != nil {
+		return err
+	}
 
 	definition, err := b.createTaskDefinition(project, service, resources)
 	if err != nil {
@@ -292,7 +298,7 @@ func (b *ecsAPIService) createSecret(project *types.Project, name string, s type
 	if s.External.External {
 		return nil
 	}
-	sensitiveData, err := ioutil.ReadFile(s.File)
+	sensitiveData, err := os.ReadFile(s.File)
 	if err != nil {
 		return err
 	}
@@ -369,8 +375,8 @@ func (b *ecsAPIService) createListener(service types.ServiceConfig, port types.S
 		strings.ToUpper(port.Protocol),
 		port.Target,
 	)
-	//add listener to dependsOn
-	//https://stackoverflow.com/questions/53971873/the-target-group-does-not-have-an-associated-load-balancer
+	// add listener to dependsOn
+	// https://stackoverflow.com/questions/53971873/the-target-group-does-not-have-an-associated-load-balancer
 	template.Resources[listenerName] = &elasticloadbalancingv2.Listener{
 		DefaultActions: []elasticloadbalancingv2.Listener_Action{
 			{
@@ -450,7 +456,7 @@ func (b *ecsAPIService) createTaskExecutionRole(project *types.Project, service 
 	return taskExecutionRole
 }
 
-func (b *ecsAPIService) createTaskRole(project *types.Project, service types.ServiceConfig, template *cloudformation.Template, resources awsResources) string {
+func (b *ecsAPIService) createTaskRole(project *types.Project, service types.ServiceConfig, template *cloudformation.Template, resources awsResources) (string, error) {
 	taskRole := fmt.Sprintf("%sTaskRole", normalizeResourceName(service.Name))
 	rolePolicies := []iam.Role_Policy{}
 	if roles, ok := service.Extensions[extensionRole]; ok {
@@ -460,6 +466,13 @@ func (b *ecsAPIService) createTaskRole(project *types.Project, service types.Ser
 		})
 	}
 	for _, vol := range service.Volumes {
+		if vol.Source == "" {
+			return "", fmt.Errorf(
+				"service %s has an invalid volume %s: ECS does not support sourceless volumes",
+				service.Name,
+				vol.Target,
+			)
+		}
 		rolePolicies = append(rolePolicies, iam.Role_Policy{
 			PolicyName:     fmt.Sprintf("%s%sVolumeMountPolicy", normalizeResourceName(service.Name), normalizeResourceName(vol.Source)),
 			PolicyDocument: volumeMountPolicyDocument(vol.Source, resources.filesystems[vol.Source].ARN()),
@@ -472,7 +485,7 @@ func (b *ecsAPIService) createTaskRole(project *types.Project, service types.Ser
 		}
 	}
 	if len(rolePolicies) == 0 && len(managedPolicies) == 0 {
-		return ""
+		return "", nil
 	}
 	template.Resources[taskRole] = &iam.Role{
 		AssumeRolePolicyDocument: ecsTaskAssumeRolePolicyDocument,
@@ -480,7 +493,7 @@ func (b *ecsAPIService) createTaskRole(project *types.Project, service types.Ser
 		ManagedPolicyArns:        managedPolicies,
 		Tags:                     serviceTags(project, service),
 	}
-	return taskRole
+	return taskRole, nil
 }
 
 func (b *ecsAPIService) createCloudMap(project *types.Project, template *cloudformation.Template, vpc string) {
@@ -531,5 +544,6 @@ func volumeResourceName(service string) string {
 }
 
 func normalizeResourceName(s string) string {
+	//nolint:staticcheck // Preserving for compatibility
 	return strings.Title(regexp.MustCompile("[^a-zA-Z0-9]+").ReplaceAllString(s, ""))
 }

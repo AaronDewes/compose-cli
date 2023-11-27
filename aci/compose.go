@@ -22,13 +22,15 @@ import (
 	"net/http"
 
 	"github.com/compose-spec/compose-go/types"
+	"github.com/docker/compose/v2/pkg/api"
+	"github.com/docker/compose/v2/pkg/progress"
 	"github.com/sirupsen/logrus"
+
+	"github.com/docker/compose-cli/utils"
 
 	"github.com/docker/compose-cli/aci/convert"
 	"github.com/docker/compose-cli/aci/login"
-	"github.com/docker/compose-cli/api/compose"
 	"github.com/docker/compose-cli/api/context/store"
-	"github.com/docker/compose-cli/api/errdefs"
 	"github.com/docker/compose-cli/utils/formatter"
 )
 
@@ -44,43 +46,78 @@ func newComposeService(ctx store.AciContext) aciComposeService {
 	}
 }
 
-func (cs *aciComposeService) Build(ctx context.Context, project *types.Project, options compose.BuildOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Build(ctx context.Context, project *types.Project, options api.BuildOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Push(ctx context.Context, project *types.Project, options compose.PushOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Push(ctx context.Context, project *types.Project, options api.PushOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Pull(ctx context.Context, project *types.Project, options compose.PullOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Pull(ctx context.Context, project *types.Project, options api.PullOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Create(ctx context.Context, project *types.Project, opts compose.CreateOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Create(ctx context.Context, project *types.Project, opts api.CreateOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Start(ctx context.Context, project *types.Project, options compose.StartOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Start(ctx context.Context, project *types.Project, options api.StartOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Restart(ctx context.Context, project *types.Project, options compose.RestartOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Restart(ctx context.Context, project *types.Project, options api.RestartOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Stop(ctx context.Context, project *types.Project, options compose.StopOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Stop(ctx context.Context, project *types.Project, options api.StopOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Pause(ctx context.Context, project string, options compose.PauseOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Pause(ctx context.Context, project string, options api.PauseOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) UnPause(ctx context.Context, project string, options compose.PauseOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) UnPause(ctx context.Context, project string, options api.PauseOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Up(ctx context.Context, project *types.Project, options compose.UpOptions) error {
+func (cs *aciComposeService) Copy(ctx context.Context, project *types.Project, options api.CopyOptions) error {
+	return api.ErrNotImplemented
+}
+
+func (cs *aciComposeService) Up(ctx context.Context, project *types.Project, options api.UpOptions) error {
+	if err := checkUnsupportedUpOptions(ctx, options); err != nil {
+		return err
+	}
+	return progress.Run(ctx, func(ctx context.Context) error {
+		return cs.up(ctx, project)
+	})
+}
+
+func checkUnsupportedUpOptions(ctx context.Context, o api.UpOptions) error {
+	var errs error
+	checks := []struct {
+		toCheck, expected interface{}
+		option            string
+	}{
+		{o.Start.CascadeStop, false, "abort-on-container-exit"},
+		{o.Create.RecreateDependencies, api.RecreateDiverged, "always-recreate-deps"},
+		{len(o.Start.AttachTo), 0, "attach-dependencies"},
+		{len(o.Start.ExitCodeFrom), 0, "exit-code-from"},
+		{o.Create.Recreate, api.RecreateDiverged, "force-recreate"},
+		{o.Create.QuietPull, false, "quiet-pull"},
+		{o.Create.RemoveOrphans, false, "remove-orphans"},
+		{o.Create.Inherit, true, "renew-anon-volumes"},
+		{o.Create.Timeout, nil, "timeout"},
+	}
+	for _, c := range checks {
+		errs = utils.CheckUnsupported(ctx, errs, c.toCheck, c.expected, "up", c.option)
+	}
+	return errs
+}
+
+func (cs *aciComposeService) up(ctx context.Context, project *types.Project) error {
 	logrus.Debugf("Up on project with name %q", project.Name)
 
 	if err := autocreateFileshares(ctx, project); err != nil {
@@ -118,25 +155,40 @@ func (cs aciComposeService) warnKeepVolumeOnDown(ctx context.Context, projectNam
 	return nil
 }
 
-func (cs *aciComposeService) Down(ctx context.Context, projectName string, options compose.DownOptions) error {
-	logrus.Debugf("Down on projectName with name %q", projectName)
-
-	if err := cs.warnKeepVolumeOnDown(ctx, projectName); err != nil {
+func (cs *aciComposeService) Down(ctx context.Context, projectName string, options api.DownOptions) error {
+	if err := checkUnsupportedDownOptions(ctx, options); err != nil {
 		return err
 	}
+	return progress.Run(ctx, func(ctx context.Context) error {
+		logrus.Debugf("Down on project with name %q", projectName)
 
-	cg, err := deleteACIContainerGroup(ctx, cs.ctx, projectName)
-	if err != nil {
+		if err := cs.warnKeepVolumeOnDown(ctx, projectName); err != nil {
+			return err
+		}
+
+		cg, err := deleteACIContainerGroup(ctx, cs.ctx, projectName)
+		if err != nil {
+			return err
+		}
+		if cg.IsHTTPStatus(http.StatusNoContent) {
+			return api.ErrNotFound
+		}
+
 		return err
-	}
-	if cg.IsHTTPStatus(http.StatusNoContent) {
-		return errdefs.ErrNotFound
-	}
-
-	return err
+	})
 }
 
-func (cs *aciComposeService) Ps(ctx context.Context, projectName string, options compose.PsOptions) ([]compose.ContainerSummary, error) {
+func checkUnsupportedDownOptions(ctx context.Context, o api.DownOptions) error {
+	var errs error
+	errs = utils.CheckUnsupported(ctx, errs, o.Volumes, false, "down", "volumes")
+	errs = utils.CheckUnsupported(ctx, errs, o.Images, "", "down", "images")
+	return errs
+}
+
+func (cs *aciComposeService) Ps(ctx context.Context, projectName string, options api.PsOptions) ([]api.ContainerSummary, error) {
+	if err := checkUnsupportedPsOptions(ctx, options); err != nil {
+		return nil, err
+	}
 	groupsClient, err := login.NewContainerGroupsClient(cs.ctx.SubscriptionID)
 	if err != nil {
 		return nil, err
@@ -151,15 +203,15 @@ func (cs *aciComposeService) Ps(ctx context.Context, projectName string, options
 		return nil, fmt.Errorf("no containers found in ACI container group %s", projectName)
 	}
 
-	res := []compose.ContainerSummary{}
+	res := []api.ContainerSummary{}
 	for _, container := range *group.Containers {
 		if isContainerVisible(container, group, false) {
 			continue
 		}
-		var publishers []compose.PortPublisher
+		var publishers []api.PortPublisher
 		urls := formatter.PortsToStrings(convert.ToPorts(group.IPAddress, *container.Ports), convert.FQDN(group, cs.ctx.Location))
 		for i, p := range *container.Ports {
-			publishers = append(publishers, compose.PortPublisher{
+			publishers = append(publishers, api.PortPublisher{
 				URL:           urls[i],
 				TargetPort:    int(*p.Port),
 				PublishedPort: int(*p.Port),
@@ -167,7 +219,7 @@ func (cs *aciComposeService) Ps(ctx context.Context, projectName string, options
 			})
 		}
 		id := getContainerID(group, container)
-		res = append(res, compose.ContainerSummary{
+		res = append(res, api.ContainerSummary{
 			ID:         id,
 			Name:       id,
 			Project:    projectName,
@@ -179,26 +231,33 @@ func (cs *aciComposeService) Ps(ctx context.Context, projectName string, options
 	return res, nil
 }
 
-func (cs *aciComposeService) List(ctx context.Context, opts compose.ListOptions) ([]compose.Stack, error) {
+func checkUnsupportedPsOptions(ctx context.Context, o api.PsOptions) error {
+	return utils.CheckUnsupported(ctx, nil, o.All, false, "ps", "all")
+}
+
+func (cs *aciComposeService) List(ctx context.Context, opts api.ListOptions) ([]api.Stack, error) {
+	if err := checkUnsupportedListOptions(ctx, opts); err != nil {
+		return nil, err
+	}
 	containerGroups, err := getACIContainerGroups(ctx, cs.ctx.SubscriptionID, cs.ctx.ResourceGroup)
 	if err != nil {
 		return nil, err
 	}
 
-	var stacks []compose.Stack
+	var stacks []api.Stack
 	for _, group := range containerGroups {
 		if _, found := group.Tags[composeContainerTag]; !found {
 			continue
 		}
-		state := compose.RUNNING
+		state := api.RUNNING
 		for _, container := range *group.ContainerGroupProperties.Containers {
 			containerState := convert.GetStatus(container, group)
-			if containerState != compose.RUNNING {
+			if containerState != api.RUNNING {
 				state = containerState
 				break
 			}
 		}
-		stacks = append(stacks, compose.Stack{
+		stacks = append(stacks, api.Stack{
 			ID:     *group.ID,
 			Name:   *group.Name,
 			Status: state,
@@ -207,41 +266,45 @@ func (cs *aciComposeService) List(ctx context.Context, opts compose.ListOptions)
 	return stacks, nil
 }
 
-func (cs *aciComposeService) Logs(ctx context.Context, projectName string, consumer compose.LogConsumer, options compose.LogOptions) error {
-	return errdefs.ErrNotImplemented
+func checkUnsupportedListOptions(ctx context.Context, o api.ListOptions) error {
+	return utils.CheckUnsupported(ctx, nil, o.All, false, "ls", "all")
 }
 
-func (cs *aciComposeService) Convert(ctx context.Context, project *types.Project, options compose.ConvertOptions) ([]byte, error) {
-	return nil, errdefs.ErrNotImplemented
+func (cs *aciComposeService) Logs(ctx context.Context, projectName string, consumer api.LogConsumer, options api.LogOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Kill(ctx context.Context, project *types.Project, options compose.KillOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Convert(ctx context.Context, project *types.Project, options api.ConvertOptions) ([]byte, error) {
+	return nil, api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) RunOneOffContainer(ctx context.Context, project *types.Project, opts compose.RunOptions) (int, error) {
-	return 0, errdefs.ErrNotImplemented
+func (cs *aciComposeService) Kill(ctx context.Context, project *types.Project, options api.KillOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Remove(ctx context.Context, project *types.Project, options compose.RemoveOptions) ([]string, error) {
-	return nil, errdefs.ErrNotImplemented
+func (cs *aciComposeService) RunOneOffContainer(ctx context.Context, project *types.Project, opts api.RunOptions) (int, error) {
+	return 0, api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Exec(ctx context.Context, project *types.Project, opts compose.RunOptions) error {
-	return errdefs.ErrNotImplemented
-}
-func (cs *aciComposeService) Top(ctx context.Context, projectName string, services []string) ([]compose.ContainerProcSummary, error) {
-	return nil, errdefs.ErrNotImplemented
+func (cs *aciComposeService) Remove(ctx context.Context, project *types.Project, options api.RemoveOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Events(ctx context.Context, project string, options compose.EventsOptions) error {
-	return errdefs.ErrNotImplemented
+func (cs *aciComposeService) Exec(ctx context.Context, project string, opts api.RunOptions) (int, error) {
+	return 0, api.ErrNotImplemented
+}
+func (cs *aciComposeService) Top(ctx context.Context, projectName string, services []string) ([]api.ContainerProcSummary, error) {
+	return nil, api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Port(ctx context.Context, project string, service string, port int, options compose.PortOptions) (string, int, error) {
-	return "", 0, errdefs.ErrNotImplemented
+func (cs *aciComposeService) Events(ctx context.Context, project string, options api.EventsOptions) error {
+	return api.ErrNotImplemented
 }
 
-func (cs *aciComposeService) Images(ctx context.Context, projectName string, options compose.ImagesOptions) ([]compose.ImageSummary, error) {
-	return nil, errdefs.ErrNotImplemented
+func (cs *aciComposeService) Port(ctx context.Context, project string, service string, port int, options api.PortOptions) (string, int, error) {
+	return "", 0, api.ErrNotImplemented
+}
+
+func (cs *aciComposeService) Images(ctx context.Context, projectName string, options api.ImagesOptions) ([]api.ImageSummary, error) {
+	return nil, api.ErrNotImplemented
 }
